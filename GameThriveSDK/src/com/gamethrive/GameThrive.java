@@ -20,8 +20,12 @@
 package com.gamethrive;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.Locale;
 
@@ -33,12 +37,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.util.TypedValue;
 
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
 import com.google.android.gms.ads.identifier.AdvertisingIdClient.Info;
@@ -50,7 +57,16 @@ import com.google.android.gms.gcm.GoogleCloudMessaging;
 import com.loopj.android.http.*;
 
 public class GameThrive {
-    /**
+    
+	public interface IdsAvailableHandler {
+		void idsAvailable(String playerId, String registrationId);
+	}
+	
+	public interface GetTagsHandler {
+		void tagsAvailable(JSONObject tags);
+	}
+	
+	/**
      * Tag used on log messages.
      */
     static final String TAG = "GameThrive";
@@ -66,6 +82,10 @@ public class GameThrive {
 	
 	static GameThrive instance;
 	private boolean foreground = true;
+
+	private IdsAvailableHandler idsAvailableHandler;
+	
+	private long lastTrackedTime;
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId, NotificationOpenedHandler notificationOpenedHandler) {
 		instance = this;
@@ -73,6 +93,7 @@ public class GameThrive {
 		appId = gameThriveAppId;
 		appContext = context;
 		this.notificationOpenedHandler = notificationOpenedHandler;
+		lastTrackedTime = SystemClock.elapsedRealtime();
 		
 		// Re-register player if the app id changed, this might happen when a dev is testing.
 		String oldAppId = GetSavedAppId();
@@ -115,10 +136,33 @@ public class GameThrive {
     
     public void onPaused() {
     	foreground = false;
+    	
+    	if (GetPlayerId() == null)
+    		return;
+    	
+    	JSONObject jsonBody = new JSONObject();
+		try {
+			jsonBody.put("app_id", appId);
+			jsonBody.put("state", "ping");
+			jsonBody.put("active_time", (long)(((SystemClock.elapsedRealtime() - lastTrackedTime) / 1000d) + 0.5d));
+		
+			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() + "/on_focus", jsonBody, new JsonHttpResponseHandler() {
+				@Override
+				 public void onFailure(Throwable e) {
+					 Log.i(TAG, "sendTags:JSON Failed");
+					 e.printStackTrace();
+				 }
+			});
+			
+			lastTrackedTime = SystemClock.elapsedRealtime();
+		} catch (Throwable t) {
+			t.printStackTrace();
+		}
     }
     
     public void onResumed() {
     	foreground = true;
+    	lastTrackedTime = SystemClock.elapsedRealtime();
     }
     
     boolean isForeground() {
@@ -129,13 +173,13 @@ public class GameThrive {
      * Registers the application with GCM servers asynchronously.
      */
     private void registerInBackground() {
-    	 new Thread(new Runnable() {
-		       public void run() {
-                String msg = "";
+    	new Thread(new Runnable() {
+    		public void run() {
+    			String msg = "";
                 try {
                     if (gcm == null)
                         gcm = GoogleCloudMessaging.getInstance(appContext);
-                    registrationId = gcm.register(googleProjectNumber);
+                    SaveRegistractionId(gcm.register(googleProjectNumber));
                     msg = "Device registered, registration ID=" + registrationId;
                 } catch (IOException ex) {
                     msg = "Error :" + ex.getMessage();
@@ -147,8 +191,8 @@ public class GameThrive {
             }
         }).start();
     }
-    
-    // Do not call this function from the main thread. Otherwise, 
+
+	// Do not call this function from the main thread. Otherwise, 
 	// an IllegalStateException will be thrown.
 	private String getAdvertisingId() {
 		try {
@@ -253,10 +297,31 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
+		    			jsonBody.put("sdk", "1.2.3");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
 		    			catch (PackageManager.NameNotFoundException e) {}
+		    			
+		    			try {
+			    			Field[] fields = Class.forName(appContext.getPackageName() + ".R$raw").getFields();
+			    			JSONArray soundList = new JSONArray();
+			    			TypedValue fileType = new TypedValue();
+			    			String fileName;
+			    			
+			    			for(int i = 0; i < fields.length; i++) {
+			    				appContext.getResources().getValue(fields[i].getInt(null), fileType, true);
+			    				fileName = fileType.string.toString().toLowerCase();
+			    				
+			    				if (fileName.endsWith(".wav") || fileName.endsWith(".mp3"))
+			    					soundList.put(fields[i].getName());
+			    			}
+			    			
+			    			if (soundList.length() > 0)
+			    				jsonBody.put("sounds", soundList);
+		    			}
+		    			catch (Throwable e) {
+		    			}
 		    			
 		    			if (GetPlayerId() == null) {
 		    				JsonHttpResponseHandler jsonHandler = new JsonHttpResponseHandler() {
@@ -267,6 +332,16 @@ public class GameThrive {
 		    							if (pendingTags != null) {
 		    								sendTags(pendingTags);
 		    								pendingTags = null;
+		    							}
+		    							
+		    							if (idsAvailableHandler != null) {
+		    								 appContext.runOnUiThread(new Runnable() {
+		    					    			 @Override
+		    					    			 public void run() {
+		    					    				 idsAvailableHandler.idsAvailable(GetPlayerId(), GetRegistrationId());
+				    								 idsAvailableHandler = null;
+		    					    			 }
+		    					    		 });
 		    							}
 		    						} catch (JSONException e) {
 		    							e.printStackTrace();
@@ -325,7 +400,7 @@ public class GameThrive {
 				GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 					@Override
 					 public void onFailure(Throwable e) {
-						 Log.i(TAG, "JSON Failed");
+						 Log.i(TAG, "sendTags:JSON Failed");
 						 e.printStackTrace();
 					 }
 				});
@@ -333,6 +408,68 @@ public class GameThrive {
 		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
 			e.printStackTrace();
 		}
+    }
+    
+    public void getTags(final GetTagsHandler getTagsHandler) {
+		GameThriveRestClient.getOnNewThread(appContext, "players/" + GetPlayerId(), new JsonHttpResponseHandler() {
+			@Override
+			public void onSuccess(int statusCode, Header[] headers, final JSONObject response) {
+				appContext.runOnUiThread(new Runnable() {
+					@Override
+					public void run() {
+						try {
+							getTagsHandler.tagsAvailable(response.getJSONObject("tags"));
+						} catch (JSONException e) {
+							e.printStackTrace();
+						}
+					}
+				});
+			}
+			
+			@Override
+			public void onFailure(Throwable e) {
+				Log.i(TAG, "getTags:JSON Failed");
+				e.printStackTrace();
+			}
+		});
+    }
+    
+    public void deleteTag(String key) {
+    	Collection<String> tempList = new ArrayList<String>(1);
+    	tempList.add(key);
+    	deleteTags(tempList);
+    }
+    
+    public void deleteTags(Collection<String> keys) {
+		if (GetPlayerId() == null)
+			return;
+    	
+    	try {
+    		JSONObject jsonTags = new JSONObject();
+    		for(String key : keys)
+    			jsonTags.put(key, "");
+    		
+			JSONObject jsonBody = new JSONObject();
+			jsonBody.put("app_id", appId);
+			jsonBody.put("tags", jsonTags);
+				
+			GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
+				@Override
+				 public void onFailure(Throwable e) {
+					 Log.i(TAG, "deleteTags:JSON Failed");
+					 e.printStackTrace();
+				 }
+			});
+		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
+			e.printStackTrace();
+		}
+    }
+    
+    public void idsAvailable(IdsAvailableHandler idsAvailableHandler) {
+    	if (GetPlayerId() != null)
+    		idsAvailableHandler.idsAvailable(GetPlayerId(), GetRegistrationId());
+    	else
+    		this.idsAvailableHandler = idsAvailableHandler;
     }
     
     public void sendPurchase(double amount) {
@@ -466,6 +603,22 @@ public class GameThrive {
         editor.putString("GT_PLAYER_ID", playerId);
         editor.commit();
     }
+    
+    public String GetRegistrationId() {
+    	if (registrationId == null) {
+    		final SharedPreferences prefs = getGcmPreferences(appContext);
+    		registrationId = prefs.getString("GT_REGISTRATION_ID", null);
+    	}
+    	return registrationId;
+    }
+    
+	private void SaveRegistractionId(String registartionId) {
+    	this.registrationId = registartionId;
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString("GT_REGISTRATION_ID", registartionId);
+        editor.commit();
+	}
     
     private static SharedPreferences getGcmPreferences(Context context) {
         return context.getSharedPreferences(GameThrive.class.getSimpleName(), Context.MODE_PRIVATE);

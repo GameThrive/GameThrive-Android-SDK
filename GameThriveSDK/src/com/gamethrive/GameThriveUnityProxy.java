@@ -19,6 +19,8 @@ package com.gamethrive;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.gamethrive.GameThrive.GetTagsHandler;
+import com.gamethrive.GameThrive.IdsAvailableHandler;
 import com.unity3d.player.UnityPlayer;
 
 public class GameThriveUnityProxy implements NotificationOpenedHandler {
@@ -59,5 +61,37 @@ public class GameThriveUnityProxy implements NotificationOpenedHandler {
 	
 	public void sendPurchase(double amount) {
 		gameThrive.sendPurchase(amount);
+	}
+	
+	public void getTags() {
+		gameThrive.getTags(new GetTagsHandler() {
+			@Override
+			public void tagsAvailable(JSONObject tags) {
+				UnityPlayer.UnitySendMessage(unitylistenerName, "onTagsReceived", tags.toString());
+			}
+		});
+	}
+	
+	public void deleteTag(String key) {
+		gameThrive.deleteTag(key);
+	}
+	
+	public void idsAvailable() {
+		gameThrive.idsAvailable(new IdsAvailableHandler() {
+			@Override
+			public void idsAvailable(String playerId, String registrationId) {
+				JSONObject jsonIds = new JSONObject();
+				try {
+					jsonIds.put("playerId", playerId);
+					if (registrationId != null)
+						jsonIds.put("pushToken", registrationId);
+					else
+						jsonIds.put("pushToken", "");
+					UnityPlayer.UnitySendMessage(unitylistenerName, "onIdsAvailable", jsonIds.toString());
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+			}
+		});
 	}
 }

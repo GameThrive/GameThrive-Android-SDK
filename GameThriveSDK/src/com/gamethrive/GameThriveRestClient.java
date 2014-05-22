@@ -41,10 +41,6 @@ class GameThriveRestClient {
 	  clientSync.setTimeout(TIMEOUT);
 	  clientSync.setMaxRetriesAndTimeout(1, TIMEOUT);
   }
-
-//  public static void get(String url, RequestParams params, AsyncHttpResponseHandler responseHandler) {
-//      client.get(getAbsoluteUrl(url), params, responseHandler);
-//  }
   
   static void put(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
@@ -56,6 +52,7 @@ class GameThriveRestClient {
       client.post(context, BASE_URL + url, entity, "application/json", responseHandler);
   }
   
+  
   static void putSync(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
 	  clientSync.put(context, BASE_URL + url, entity, "application/json", responseHandler);
@@ -65,8 +62,17 @@ class GameThriveRestClient {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
 	  clientSync.post(context, BASE_URL + url, entity, "application/json", responseHandler);
   }
+  
+  
+  // Call getOnNewThread when you can't block the thread your calling this from (like calling from a UI hread) and
+  // need to make sure the ResponseHandler gets called in cases where the thread which called this could die before getting a response.
+  static void getOnNewThread(final Context context, final String url, final AsyncHttpResponseHandler responseHandler) {
+	  new Thread(new Runnable() {
+	      public void run() {
+	    	  clientSync.get(context, BASE_URL + url, responseHandler);
+	   		}
+	  }).start();
+  }
+  
 
-//  private static String getAbsoluteUrl(String relativeUrl) {
-//      return BASE_URL + relativeUrl;
-//  }
 }
