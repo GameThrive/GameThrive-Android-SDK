@@ -16,6 +16,7 @@
 
 package com.hiptic.gamethriveexample;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.Activity;
@@ -77,12 +78,17 @@ public class MainActivity extends Activity implements NotificationOpenedHandler 
 	 */
 	@Override
 	public void notificationOpened(String message, JSONObject additionalData, boolean isActive) {
-		String messageTitle;
+		String messageTitle = null;
 		AlertDialog.Builder builder = null;
 		
 		if (additionalData != null) {
-			if (additionalData.has("discount"))
-				messageTitle = "Discount!";
+			if (additionalData.has("discount")) {
+				try {
+					messageTitle = additionalData.getString("discount");
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+			}
 			else if (additionalData.has("bonusCredits"))
 				messageTitle = "Bonus Credits!";
 			else
