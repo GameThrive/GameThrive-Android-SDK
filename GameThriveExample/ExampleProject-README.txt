@@ -9,7 +9,7 @@ Instructions to build example with Eclipse.
    3A. Go to File>Import and then to Android>Existing Android Code into Workspace
    3B. Navigate to <android-sdk>\extras\google\google_play_services\libproject\google-play-services_lib and select the project then press Finish.
 4. Add Google-play-services_lib as a library to the example project.
-   4A. Right click on your game project and go to Properties.
+   4A. Right click on the GameThriveExample project and go to Properties.
    4B. On the left Select Android and then press the "Add..." button in Library section.
    4C. Pick the google-play-services_lib.
    
