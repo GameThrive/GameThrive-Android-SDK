@@ -87,6 +87,8 @@ public class GameThrive {
 	
 	private long lastTrackedTime;
 	
+	private static String lastNotificationIdOpenned;
+	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId, NotificationOpenedHandler notificationOpenedHandler) {
 		instance = this;
 		this.googleProjectNumber = googleProjectNumber;
@@ -297,7 +299,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "1.2.3");
+		    			jsonBody.put("sdk", "1.2.4");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -547,12 +549,19 @@ public class GameThrive {
     
     private static void sendNotificationOpened(Context inContext, Bundle data) {
     	try {
+			JSONObject customJson = new JSONObject(data.getString("custom"));
+    		String notificationId = customJson.getString("i");
+    		
+    		// In some rare cases this can double fire, preventing that here.
+    		if (notificationId.equals(lastNotificationIdOpenned))
+    			return;
+    		
+    		lastNotificationIdOpenned = notificationId;
+    		
 			JSONObject jsonBody = new JSONObject();
 			jsonBody.put("app_id", GetSavedAppId(inContext));
 			jsonBody.put("player_id", GetSavedPlayerId(inContext));
 			jsonBody.put("opened", true);
-			
-			JSONObject customJson = new JSONObject(data.getString("custom"));
 			
 			GameThriveRestClient.put(inContext, "notifications/" + customJson.getString("i"), jsonBody, new JsonHttpResponseHandler() {
 				@Override
