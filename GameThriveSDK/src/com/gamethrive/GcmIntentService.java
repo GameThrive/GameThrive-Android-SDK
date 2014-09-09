@@ -102,7 +102,7 @@ public class GcmIntentService extends IntentService {
                 new NotificationCompat.Builder(this)
         .setAutoCancel(true)
         .setSmallIcon(this.getApplicationInfo().icon)
-        .setContentTitle(this.getString(this.getApplicationInfo().labelRes))
+        .setContentTitle(getPackageManager().getApplicationLabel(getApplicationInfo()))
         .setStyle(new NotificationCompat.BigTextStyle().bigText(msg.getString("alert")))
         .setTicker(msg.getString("alert"))
         .setContentText(msg.getString("alert"));

@@ -16,21 +16,32 @@
 
 package com.gamethrive;
 
-import org.json.JSONException;
+import android.app.Activity;
+
 import org.json.JSONObject;
 
 import com.gamethrive.GameThrive.GetTagsHandler;
 import com.gamethrive.GameThrive.IdsAvailableHandler;
-import com.unity3d.player.UnityPlayer;
 
 public class GameThriveUnityProxy implements NotificationOpenedHandler {
 
 	private GameThrive gameThrive;
 	private String unitylistenerName;
+	private static java.lang.reflect.Method unitySendMessage;
 	
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public GameThriveUnityProxy(String listenerName, String googleProjectNumber, String gameThriveAppId) {
 		unitylistenerName = listenerName;
-		gameThrive = new GameThrive(UnityPlayer.currentActivity, googleProjectNumber, gameThriveAppId, this);
+		
+		try {
+			Class unityPlayerClass;
+			unityPlayerClass = Class.forName("com.unity3d.player.UnityPlayer");
+			unitySendMessage = unityPlayerClass.getMethod("UnitySendMessage", String.class, String.class, String.class);
+			
+			gameThrive = new GameThrive((Activity)unityPlayerClass.getField("currentActivity").get(null), googleProjectNumber, gameThriveAppId, this);
+		} catch (Throwable t) {
+			t.printStackTrace();
+		}
 	}
 	
 	@Override
@@ -40,10 +51,10 @@ public class GameThriveUnityProxy implements NotificationOpenedHandler {
 			outerObject.put("isActive", isActive);
 			outerObject.put("alert", message);
 			outerObject.put("custom", additionalData);
-		} catch (JSONException e) {
-			e.printStackTrace();
+			unitySendMessage.invoke(null, unitylistenerName, "onPushNotificationReceived", outerObject.toString());
+		} catch (Throwable t) {
+			t.printStackTrace();
 		}
-		UnityPlayer.UnitySendMessage(unitylistenerName, "onPushNotificationReceived", outerObject.toString());
 	}
 	
 	
@@ -67,7 +78,11 @@ public class GameThriveUnityProxy implements NotificationOpenedHandler {
 		gameThrive.getTags(new GetTagsHandler() {
 			@Override
 			public void tagsAvailable(JSONObject tags) {
-				UnityPlayer.UnitySendMessage(unitylistenerName, "onTagsReceived", tags.toString());
+				try {
+					unitySendMessage.invoke(null, unitylistenerName, "onTagsReceived", tags.toString());
+				} catch (Throwable t) {
+					t.printStackTrace();
+				}
 			}
 		});
 	}
@@ -87,9 +102,10 @@ public class GameThriveUnityProxy implements NotificationOpenedHandler {
 						jsonIds.put("pushToken", registrationId);
 					else
 						jsonIds.put("pushToken", "");
-					UnityPlayer.UnitySendMessage(unitylistenerName, "onIdsAvailable", jsonIds.toString());
-				} catch (JSONException e) {
-					e.printStackTrace();
+					
+					unitySendMessage.invoke(null, unitylistenerName, "onIdsAvailable", jsonIds.toString());
+				} catch (Throwable t) {
+					t.printStackTrace();
 				}
 			}
 		});

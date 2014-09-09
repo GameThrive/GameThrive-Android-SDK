@@ -299,7 +299,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "1.2.4");
+		    			jsonBody.put("sdk", "1.2.5");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -505,7 +505,7 @@ public class GameThrive {
     		 else
     			 additionalDataJSON = null;
     		 
-    		 if (customJSON.has("u")) {
+    		 if (!isActive && customJSON.has("u")) {
     			 String url = customJSON.getString("u");
 				 if (!url.startsWith("http://") && !url.startsWith("https://"))
 					   url = "http://" + url;
