@@ -25,33 +25,52 @@ import android.content.Context;
 
 import com.loopj.android.http.*;
 
+
+// We use new Threads for async calls instead of loopj's AsyncHttpClient for 2 reasons:
+// 1. To make sure our callbacks finish in cases where these methods might be called from a short lived thread.
+// 2. If there isn't a looper on the current thread we can't use loopj's built in async implementation without calling
+//    Looper.prepare() which can have unexpected results on the current thread.
+
 class GameThriveRestClient {
   private static final String BASE_URL = "https://gamethrive.com/api/v1/";
   private static final int TIMEOUT = 20000;
   
-  private static AsyncHttpClient client = new AsyncHttpClient();
   private static SyncHttpClient clientSync = new SyncHttpClient();
   
   static {
 	  // setTimeout method = socket timeout
 	  // setMaxRetriesAndTimeout = sleep between retries
-	  client.setTimeout(TIMEOUT);
-	  client.setMaxRetriesAndTimeout(1, TIMEOUT);
-	  
 	  clientSync.setTimeout(TIMEOUT);
-	  clientSync.setMaxRetriesAndTimeout(1, TIMEOUT);
+	  clientSync.setMaxRetriesAndTimeout(3, TIMEOUT);
   }
   
-  static void put(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
-	  StringEntity entity = new StringEntity(jsonBody.toString());
-      client.put(context, BASE_URL + url, entity, "application/json", responseHandler);
+  static void put(final Context context, final String url, JSONObject jsonBody, final AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+	  final StringEntity entity = new StringEntity(jsonBody.toString());
+	  
+	  new Thread(new Runnable() {
+	      public void run() {
+	    	  clientSync.put(context, BASE_URL + url, entity, "application/json", responseHandler);
+	      }
+	  }).start();
   }
 
-  static void post(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
-	  StringEntity entity = new StringEntity(jsonBody.toString());
-      client.post(context, BASE_URL + url, entity, "application/json", responseHandler);
+  static void post(final Context context, final String url, JSONObject jsonBody, final AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+	  final StringEntity entity = new StringEntity(jsonBody.toString());
+	  
+	  new Thread(new Runnable() {
+	      public void run() {
+	    	  clientSync.post(context, BASE_URL + url, entity, "application/json", responseHandler);
+	      }
+	  }).start();
   }
   
+  static void get(final Context context, final String url, final AsyncHttpResponseHandler responseHandler) {
+	  new Thread(new Runnable() {
+	      public void run() {
+	    	  clientSync.get(context, BASE_URL + url, responseHandler);
+	   		}
+	  }).start();
+  }
   
   static void putSync(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
@@ -62,17 +81,5 @@ class GameThriveRestClient {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
 	  clientSync.post(context, BASE_URL + url, entity, "application/json", responseHandler);
   }
-  
-  
-  // Call getOnNewThread when you can't block the thread your calling this from (like calling from a UI hread) and
-  // need to make sure the ResponseHandler gets called in cases where the thread which called this could die before getting a response.
-  static void getOnNewThread(final Context context, final String url, final AsyncHttpResponseHandler responseHandler) {
-	  new Thread(new Runnable() {
-	      public void run() {
-	    	  clientSync.get(context, BASE_URL + url, responseHandler);
-	   		}
-	  }).start();
-  }
-  
 
 }

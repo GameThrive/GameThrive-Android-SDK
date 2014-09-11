@@ -49,11 +49,15 @@ import java.util.regex.PatternSyntaxException;
  * });
  * </pre>
  */
-public class BinaryHttpResponseHandler extends AsyncHttpResponseHandler {
+public abstract class BinaryHttpResponseHandler extends AsyncHttpResponseHandler {
+
+    private static final String LOG_TAG = "BinaryHttpResponseHandler";
 
     private String[] mAllowedContentTypes = new String[]{
+            RequestParams.APPLICATION_OCTET_STREAM,
             "image/jpeg",
-            "image/png"
+            "image/png",
+            "image/gif"
     };
 
     /**
@@ -80,72 +84,35 @@ public class BinaryHttpResponseHandler extends AsyncHttpResponseHandler {
      * @param allowedContentTypes content types array, eg. 'image/jpeg' or pattern '.*'
      */
     public BinaryHttpResponseHandler(String[] allowedContentTypes) {
-        this();
-        mAllowedContentTypes = allowedContentTypes;
+        super();
+        if (allowedContentTypes != null) {
+            mAllowedContentTypes = allowedContentTypes;
+        } else {
+            Log.e(LOG_TAG, "Constructor passed allowedContentTypes was null !");
+        }
     }
-
-
-    //
-    // Callbacks to be overridden, typically anonymously
-    //
-
-    /**
-     * Fired when a request returns successfully, override to handle in your own code
-     *
-     * @param binaryData the body of the HTTP response from the server
-     */
-    public void onSuccess(byte[] binaryData) {
-    }
-
-    /**
-     * Fired when a request returns successfully, override to handle in your own code
-     *
-     * @param statusCode the status code of the response
-     * @param binaryData the body of the HTTP response from the server
-     */
-    public void onSuccess(int statusCode, byte[] binaryData) {
-        onSuccess(binaryData);
-    }
-
-    /**
-     * Fired when a request returns successfully, override to handle in your own code
-     *
-     * @param statusCode response HTTP statuse code
-     * @param headers    response headers, if any
-     * @param binaryData the response body, if any
-     */
 
     @Override
-    public void onSuccess(int statusCode, Header[] headers, byte[] binaryData) {
-        onSuccess(statusCode, binaryData);
-    }
-
-    /**
-     * Fired when a request fails to complete, override to handle in your own code
-     *
-     * @param statusCode response HTTP statuse code
-     * @param headers    response headers, if any
-     * @param binaryData the response body, if any
-     * @param error      the underlying cause of the failure
-     */
+    public abstract void onSuccess(int statusCode, Header[] headers, byte[] binaryData);
 
     @Override
-    public void onFailure(int statusCode, Header[] headers, byte[] binaryData, Throwable error) {
-        onFailure(statusCode, error, null);
-    }
+    public abstract void onFailure(int statusCode, Header[] headers, byte[] binaryData, Throwable error);
 
-    //
-    // Pre-processing of messages (in original calling thread, typically the UI thread)
-    //
-
-    // Interface to AsyncHttpRequest
     @Override
     public final void sendResponseMessage(HttpResponse response) throws IOException {
         StatusLine status = response.getStatusLine();
-        Header[] contentTypeHeaders = response.getHeaders("Content-Type");
+        Header[] contentTypeHeaders = response.getHeaders(AsyncHttpClient.HEADER_CONTENT_TYPE);
         if (contentTypeHeaders.length != 1) {
             //malformed/ambiguous HTTP Header, ABORT!
-            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), null, new HttpResponseException(status.getStatusCode(), "None, or more than one, Content-Type Header found!"));
+            sendFailureMessage(
+                    status.getStatusCode(),
+                    response.getAllHeaders(),
+                    null,
+                    new HttpResponseException(
+                            status.getStatusCode(),
+                            "None, or more than one, Content-Type Header found!"
+                    )
+            );
             return;
         }
         Header contentTypeHeader = contentTypeHeaders[0];
@@ -161,7 +128,15 @@ public class BinaryHttpResponseHandler extends AsyncHttpResponseHandler {
         }
         if (!foundAllowedContentType) {
             //Content-Type not in allowed list, ABORT!
-            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), null, new HttpResponseException(status.getStatusCode(), "Content-Type not allowed!"));
+            sendFailureMessage(
+                    status.getStatusCode(),
+                    response.getAllHeaders(),
+                    null,
+                    new HttpResponseException(
+                            status.getStatusCode(),
+                            "Content-Type not allowed!"
+                    )
+            );
             return;
         }
         super.sendResponseMessage(response);

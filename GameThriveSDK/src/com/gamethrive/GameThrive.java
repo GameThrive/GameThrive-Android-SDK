@@ -150,9 +150,9 @@ public class GameThrive {
 		
 			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() + "/on_focus", jsonBody, new JsonHttpResponseHandler() {
 				@Override
-				 public void onFailure(Throwable e) {
+				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 					 Log.i(TAG, "sendTags:JSON Failed");
-					 e.printStackTrace();
+					 throwable.printStackTrace();
 				 }
 			});
 			
@@ -299,7 +299,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "1.2.5");
+		    			jsonBody.put("sdk", "1.2.6");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -351,9 +351,9 @@ public class GameThrive {
 		    					}
 		    					
 		    					@Override
-		    					 public void onFailure(Throwable e) {
+		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 		    						 Log.i(TAG, "JSON Failed");
-		    						 e.printStackTrace();
+		    						 throwable.printStackTrace();
 		    					 }
 
 		    				};
@@ -361,9 +361,9 @@ public class GameThrive {
 		    			} else {
 		    				GameThriveRestClient.postSync(appContext, "players/" + GetPlayerId() + "/on_session", jsonBody, new JsonHttpResponseHandler() {
 		    					@Override
-		    					 public void onFailure(Throwable e) {
+		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 		    						 Log.i(TAG, "JSON Failed");
-		    						 e.printStackTrace();
+		    						 throwable.printStackTrace();
 		    					 }
 		    				});
 		    			}
@@ -401,9 +401,9 @@ public class GameThrive {
 				
 				GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 					@Override
-					 public void onFailure(Throwable e) {
+					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 						 Log.i(TAG, "sendTags:JSON Failed");
-						 e.printStackTrace();
+						 throwable.printStackTrace();
 					 }
 				});
     		}
@@ -413,7 +413,7 @@ public class GameThrive {
     }
     
     public void getTags(final GetTagsHandler getTagsHandler) {
-		GameThriveRestClient.getOnNewThread(appContext, "players/" + GetPlayerId(), new JsonHttpResponseHandler() {
+		GameThriveRestClient.get(appContext, "players/" + GetPlayerId(), new JsonHttpResponseHandler() {
 			@Override
 			public void onSuccess(int statusCode, Header[] headers, final JSONObject response) {
 				appContext.runOnUiThread(new Runnable() {
@@ -429,9 +429,9 @@ public class GameThrive {
 			}
 			
 			@Override
-			public void onFailure(Throwable e) {
+			public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 				Log.i(TAG, "getTags:JSON Failed");
-				e.printStackTrace();
+				throwable.printStackTrace();
 			}
 		});
     }
@@ -457,9 +457,9 @@ public class GameThrive {
 				
 			GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 				@Override
-				 public void onFailure(Throwable e) {
+				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 					 Log.i(TAG, "deleteTags:JSON Failed");
-					 e.printStackTrace();
+					 throwable.printStackTrace();
 				 }
 			});
 		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
@@ -486,9 +486,9 @@ public class GameThrive {
 			
 			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, new JsonHttpResponseHandler() {
 				@Override
-				 public void onFailure(Throwable e) {
+				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 					 Log.i(TAG, "JSON Failed");
-					 e.printStackTrace();
+					 throwable.printStackTrace();
 				    }
 			});
 		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
@@ -565,9 +565,9 @@ public class GameThrive {
 			
 			GameThriveRestClient.put(inContext, "notifications/" + customJson.getString("i"), jsonBody, new JsonHttpResponseHandler() {
 				@Override
-				public void onFailure(Throwable e) {
+				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
 					Log.i(TAG, "JSON Failed");
-					e.printStackTrace();
+					throwable.printStackTrace();
 				}
 			});
 		} catch (Throwable e) { // JSONException and UnsupportedEncodingException

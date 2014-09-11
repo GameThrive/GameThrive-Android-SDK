@@ -1,15 +1,33 @@
+/*
+    Android Asynchronous Http Client
+    Copyright (c) 2013 Jason Choy <jjwchoy@gmail.com>
+    http://loopj.com
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
+
 package com.loopj.android.http;
 
-import java.util.concurrent.Future;
+import java.lang.ref.WeakReference;
 
 /**
  * A Handle to an AsyncRequest which can be used to cancel a running request.
  */
 public class RequestHandle {
-    private final Future<?> request;
+    private final WeakReference<AsyncHttpRequest> request;
 
-    public RequestHandle(Future<?> request) {
-        this.request = request;
+    public RequestHandle(AsyncHttpRequest request) {
+        this.request = new WeakReference<AsyncHttpRequest>(request);
     }
 
     /**
@@ -28,7 +46,8 @@ public class RequestHandle {
      * completed normally; true otherwise
      */
     public boolean cancel(boolean mayInterruptIfRunning) {
-        return this.request != null && request.cancel(mayInterruptIfRunning);
+        AsyncHttpRequest _request = request.get();
+        return _request == null || _request.cancel(mayInterruptIfRunning);
     }
 
     /**
@@ -38,7 +57,8 @@ public class RequestHandle {
      * @return true if this task completed
      */
     public boolean isFinished() {
-        return this.request == null || request.isDone();
+        AsyncHttpRequest _request = request.get();
+        return _request == null || _request.isDone();
     }
 
     /**
@@ -47,6 +67,14 @@ public class RequestHandle {
      * @return true if this task was cancelled before it completed
      */
     public boolean isCancelled() {
-        return this.request != null && request.isCancelled();
+        AsyncHttpRequest _request = request.get();
+        return _request == null || _request.isCancelled();
+    }
+
+    public boolean shouldBeGarbageCollected() {
+        boolean should = isCancelled() || isFinished();
+        if (should)
+            request.clear();
+        return should;
     }
 }

@@ -40,8 +40,8 @@ import java.util.HashSet;
 import javax.net.ssl.SSLException;
 
 class RetryHandler implements HttpRequestRetryHandler {
-    private static HashSet<Class<?>> exceptionWhitelist = new HashSet<Class<?>>();
-    private static HashSet<Class<?>> exceptionBlacklist = new HashSet<Class<?>>();
+    private final static HashSet<Class<?>> exceptionWhitelist = new HashSet<Class<?>>();
+    private final static HashSet<Class<?>> exceptionBlacklist = new HashSet<Class<?>>();
 
     static {
         // Retry if the server dropped connection on us
@@ -75,12 +75,12 @@ class RetryHandler implements HttpRequestRetryHandler {
         if (executionCount > maxRetries) {
             // Do not retry if over max retry count
             retry = false;
-        } else if (isInList(exceptionBlacklist, exception)) {
-            // immediately cancel retry if the error is blacklisted
-            retry = false;
         } else if (isInList(exceptionWhitelist, exception)) {
             // immediately retry if error is whitelisted
             retry = true;
+        } else if (isInList(exceptionBlacklist, exception)) {
+            // immediately cancel retry if the error is blacklisted
+            retry = false;
         } else if (!sent) {
             // for most other errors, retry only if request hasn't been fully sent yet
             retry = true;
@@ -93,6 +93,14 @@ class RetryHandler implements HttpRequestRetryHandler {
         }
 
         return retry;
+    }
+
+    static void addClassToWhitelist(Class<?> cls) {
+        exceptionWhitelist.add(cls);
+    }
+
+    static void addClassToBlacklist(Class<?> cls) {
+        exceptionBlacklist.add(cls);
     }
 
     protected boolean isInList(HashSet<Class<?>> list, Throwable error) {

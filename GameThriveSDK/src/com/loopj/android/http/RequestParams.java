@@ -18,6 +18,8 @@
 
 package com.loopj.android.http;
 
+import android.util.Log;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -28,6 +30,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,7 +72,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * String[] colors = { "blue", "yellow" }; // Ordered collection
  * params.put("colors", colors); // url params: "colors[]=blue&amp;colors[]=yellow"
  *
- * List&lt;Map&lt;String, String&gt;&gt; listOfMaps = new ArrayList&lt;Map&lt;String, String&gt;&gt;();
+ * List&lt;Map&lt;String, String&gt;&gt; listOfMaps = new ArrayList&lt;Map&lt;String,
+ * String&gt;&gt;();
  * Map&lt;String, String&gt; user1 = new HashMap&lt;String, String&gt;();
  * user1.put("age", "30");
  * user1.put("gender", "male");
@@ -84,13 +88,37 @@ import java.util.concurrent.ConcurrentHashMap;
  * client.post("http://myendpoint.com", params, responseHandler);
  * </pre>
  */
-public class RequestParams {
+public class RequestParams implements Serializable {
 
-    protected boolean isRepeatable = false;
-    protected ConcurrentHashMap<String, String> urlParams;
-    protected ConcurrentHashMap<String, StreamWrapper> streamParams;
-    protected ConcurrentHashMap<String, FileWrapper> fileParams;
-    protected ConcurrentHashMap<String, Object> urlParamsWithObjects;
+    public final static String APPLICATION_OCTET_STREAM =
+            "application/octet-stream";
+
+    public final static String APPLICATION_JSON =
+            "application/json";
+
+    protected final static String LOG_TAG = "RequestParams";
+    protected boolean isRepeatable;
+    protected boolean useJsonStreamer;
+    protected boolean autoCloseInputStreams;
+    protected final ConcurrentHashMap<String, String> urlParams = new ConcurrentHashMap<String, String>();
+    protected final ConcurrentHashMap<String, StreamWrapper> streamParams = new ConcurrentHashMap<String, StreamWrapper>();
+    protected final ConcurrentHashMap<String, FileWrapper> fileParams = new ConcurrentHashMap<String, FileWrapper>();
+    protected final ConcurrentHashMap<String, Object> urlParamsWithObjects = new ConcurrentHashMap<String, Object>();
+    protected String contentEncoding = HTTP.UTF_8;
+
+    /**
+     * Sets content encoding for return value of {@link #getParamString()} and {@link
+     * #createFormEntity()} <p>&nbsp;</p> Default encoding is "UTF-8"
+     *
+     * @param encoding String constant from {@link org.apache.http.protocol.HTTP}
+     */
+    public void setContentEncoding(final String encoding) {
+        if (encoding != null) {
+            this.contentEncoding = encoding;
+        } else {
+            Log.d(LOG_TAG, "setContentEncoding called with null attribute");
+        }
+    }
 
     /**
      * Constructs a new empty {@code RequestParams} instance.
@@ -106,7 +134,6 @@ public class RequestParams {
      * @param source the source key/value string map to add.
      */
     public RequestParams(Map<String, String> source) {
-        init();
         if (source != null) {
             for (Map.Entry<String, String> entry : source.entrySet()) {
                 put(entry.getKey(), entry.getValue());
@@ -136,7 +163,6 @@ public class RequestParams {
      * @throws IllegalArgumentException if the number of arguments isn't even.
      */
     public RequestParams(Object... keysAndValues) {
-        init();
         int len = keysAndValues.length;
         if (len % 2 != 0)
             throw new IllegalArgumentException("Supplied arguments must be even");
@@ -167,11 +193,23 @@ public class RequestParams {
      * @throws java.io.FileNotFoundException throws if wrong File argument was passed
      */
     public void put(String key, File file) throws FileNotFoundException {
-        put(key, file, null);
+        put(key, file, null, null);
     }
 
     /**
-     * Adds a file to the request.
+     * Adds a file to the request with custom provided file name
+     *
+     * @param key            the key name for the new param.
+     * @param file           the file to add.
+     * @param customFileName file name to use instead of real file name
+     * @throws java.io.FileNotFoundException throws if wrong File argument was passed
+     */
+    public void put(String key, String customFileName, File file) throws FileNotFoundException {
+        put(key, file, null, customFileName);
+    }
+
+    /**
+     * Adds a file to the request with custom provided file content-type
      *
      * @param key         the key name for the new param.
      * @param file        the file to add.
@@ -179,8 +217,24 @@ public class RequestParams {
      * @throws java.io.FileNotFoundException throws if wrong File argument was passed
      */
     public void put(String key, File file, String contentType) throws FileNotFoundException {
-        if (key != null && file != null) {
-            fileParams.put(key, new FileWrapper(file, contentType));
+        put(key, file, contentType, null);
+    }
+
+    /**
+     * Adds a file to the request with both custom provided file content-type and file name
+     *
+     * @param key            the key name for the new param.
+     * @param file           the file to add.
+     * @param contentType    the content type of the file, eg. application/json
+     * @param customFileName file name to use instead of real file name
+     * @throws java.io.FileNotFoundException throws if wrong File argument was passed
+     */
+    public void put(String key, File file, String contentType, String customFileName) throws FileNotFoundException {
+        if (file == null || !file.exists()) {
+            throw new FileNotFoundException();
+        }
+        if (key != null) {
+            fileParams.put(key, new FileWrapper(file, contentType, customFileName));
         }
     }
 
@@ -214,8 +268,21 @@ public class RequestParams {
      * @param contentType the content type of the file, eg. application/json
      */
     public void put(String key, InputStream stream, String name, String contentType) {
+        put(key, stream, name, contentType, autoCloseInputStreams);
+    }
+
+    /**
+     * Adds an input stream to the request.
+     *
+     * @param key         the key name for the new param.
+     * @param stream      the input stream to add.
+     * @param name        the name of the stream.
+     * @param contentType the content type of the file, eg. application/json
+     * @param autoClose   close input stream automatically on successful upload
+     */
+    public void put(String key, InputStream stream, String name, String contentType, boolean autoClose) {
         if (key != null && stream != null) {
-            streamParams.put(key, new StreamWrapper(stream, name, contentType));
+            streamParams.put(key, StreamWrapper.newInstance(stream, name, contentType, autoClose));
         }
     }
 
@@ -228,6 +295,30 @@ public class RequestParams {
     public void put(String key, Object value) {
         if (key != null && value != null) {
             urlParamsWithObjects.put(key, value);
+        }
+    }
+
+    /**
+     * Adds a int value to the request.
+     *
+     * @param key   the key name for the new param.
+     * @param value the value int for the new param.
+     */
+    public void put(String key, int value) {
+        if (key != null) {
+            urlParams.put(key, String.valueOf(value));
+        }
+    }
+
+    /**
+     * Adds a long value to the request.
+     *
+     * @param key   the key name for the new param.
+     * @param value the value long for the new param.
+     */
+    public void put(String key, long value) {
+        if (key != null) {
+            urlParams.put(key, String.valueOf(value));
         }
     }
 
@@ -263,6 +354,19 @@ public class RequestParams {
         streamParams.remove(key);
         fileParams.remove(key);
         urlParamsWithObjects.remove(key);
+    }
+
+    /**
+     * Check if a parameter is defined.
+     *
+     * @param key the key name for the parameter to check existence.
+     * @return Boolean
+     */
+    public boolean has(String key) {
+        return urlParams.get(key) != null ||
+                streamParams.get(key) != null ||
+                fileParams.get(key) != null ||
+                urlParamsWithObjects.get(key) != null;
     }
 
     @Override
@@ -312,8 +416,22 @@ public class RequestParams {
         this.isRepeatable = isRepeatable;
     }
 
+    public void setUseJsonStreamer(boolean useJsonStreamer) {
+        this.useJsonStreamer = useJsonStreamer;
+    }
+
     /**
-     * Returns an HttpEntity containing all request parameters
+     * Set global flag which determines whether to automatically close input streams on successful
+     * upload.
+     *
+     * @param flag boolean whether to automatically close input streams
+     */
+    public void setAutoCloseInputStreams(boolean flag) {
+        autoCloseInputStreams = flag;
+    }
+
+    /**
+     * Returns an HttpEntity containing all request parameters.
      *
      * @param progressHandler HttpResponseHandler for reporting progress on entity submit
      * @return HttpEntity resulting HttpEntity to be included along with {@link
@@ -321,18 +439,57 @@ public class RequestParams {
      * @throws IOException if one of the streams cannot be read
      */
     public HttpEntity getEntity(ResponseHandlerInterface progressHandler) throws IOException {
-        if (streamParams.isEmpty() && fileParams.isEmpty()) {
+        if (useJsonStreamer) {
+            return createJsonStreamerEntity(progressHandler);
+        } else if (streamParams.isEmpty() && fileParams.isEmpty()) {
             return createFormEntity();
         } else {
             return createMultipartEntity(progressHandler);
         }
     }
 
+    private HttpEntity createJsonStreamerEntity(ResponseHandlerInterface progressHandler) throws IOException {
+        JsonStreamerEntity entity = new JsonStreamerEntity(progressHandler,
+                !fileParams.isEmpty() || !streamParams.isEmpty());
+
+        // Add string params
+        for (ConcurrentHashMap.Entry<String, String> entry : urlParams.entrySet()) {
+            entity.addPart(entry.getKey(), entry.getValue());
+        }
+
+        // Add non-string params
+        for (ConcurrentHashMap.Entry<String, Object> entry : urlParamsWithObjects.entrySet()) {
+            entity.addPart(entry.getKey(), entry.getValue());
+        }
+
+        // Add file params
+        for (ConcurrentHashMap.Entry<String, FileWrapper> entry : fileParams.entrySet()) {
+            entity.addPart(entry.getKey(), entry.getValue());
+        }
+
+        // Add stream params
+        for (ConcurrentHashMap.Entry<String, StreamWrapper> entry : streamParams.entrySet()) {
+            StreamWrapper stream = entry.getValue();
+            if (stream.inputStream != null) {
+                entity.addPart(entry.getKey(),
+                        StreamWrapper.newInstance(
+                                stream.inputStream,
+                                stream.name,
+                                stream.contentType,
+                                stream.autoClose)
+                );
+            }
+        }
+
+        return entity;
+    }
+
     private HttpEntity createFormEntity() {
         try {
-            return new UrlEncodedFormEntity(getParamsList(), HTTP.UTF_8);
+            return new UrlEncodedFormEntity(getParamsList(), contentEncoding);
         } catch (UnsupportedEncodingException e) {
-            return null; // Actually cannot happen when using utf-8
+            Log.e(LOG_TAG, "createFormEntity failed", e);
+            return null; // Can happen, if the 'contentEncoding' won't be HTTP.UTF_8
         }
     }
 
@@ -342,13 +499,13 @@ public class RequestParams {
 
         // Add string params
         for (ConcurrentHashMap.Entry<String, String> entry : urlParams.entrySet()) {
-            entity.addPart(entry.getKey(), entry.getValue());
+            entity.addPartWithCharset(entry.getKey(), entry.getValue(), contentEncoding);
         }
 
         // Add non-string params
         List<BasicNameValuePair> params = getParamsList(null, urlParamsWithObjects);
         for (BasicNameValuePair kv : params) {
-            entity.addPart(kv.getName(), kv.getValue());
+            entity.addPartWithCharset(kv.getName(), kv.getValue(), contentEncoding);
         }
 
         // Add stream params
@@ -363,17 +520,10 @@ public class RequestParams {
         // Add file params
         for (ConcurrentHashMap.Entry<String, FileWrapper> entry : fileParams.entrySet()) {
             FileWrapper fileWrapper = entry.getValue();
-            entity.addPart(entry.getKey(), fileWrapper.file, fileWrapper.contentType);
+            entity.addPart(entry.getKey(), fileWrapper.file, fileWrapper.contentType, fileWrapper.customFileName);
         }
 
         return entity;
-    }
-
-    private void init() {
-        urlParams = new ConcurrentHashMap<String, String>();
-        streamParams = new ConcurrentHashMap<String, StreamWrapper>();
-        fileParams = new ConcurrentHashMap<String, FileWrapper>();
-        urlParamsWithObjects = new ConcurrentHashMap<String, Object>();
     }
 
     protected List<BasicNameValuePair> getParamsList() {
@@ -391,61 +541,79 @@ public class RequestParams {
     private List<BasicNameValuePair> getParamsList(String key, Object value) {
         List<BasicNameValuePair> params = new LinkedList<BasicNameValuePair>();
         if (value instanceof Map) {
-            Map<String, Object> map = (Map<String, Object>) value;
-            List<String> list = new ArrayList<String>(map.keySet());
+            Map map = (Map) value;
+            List list = new ArrayList<Object>(map.keySet());
             // Ensure consistent ordering in query string
-            Collections.sort(list);
-            for (String nestedKey : list) {
-                Object nestedValue = map.get(nestedKey);
-                if (nestedValue != null) {
-                    params.addAll(getParamsList(key == null ? nestedKey : String.format("%s[%s]", key, nestedKey),
-                            nestedValue));
+            if (list.size() > 0 && list.get(0) instanceof Comparable) {
+                Collections.sort(list);
+            }
+            for (Object nestedKey : list) {
+                if (nestedKey instanceof String) {
+                    Object nestedValue = map.get(nestedKey);
+                    if (nestedValue != null) {
+                        params.addAll(getParamsList(key == null ? (String) nestedKey : String.format("%s[%s]", key, nestedKey),
+                                nestedValue));
+                    }
                 }
             }
         } else if (value instanceof List) {
-            List<Object> list = (List<Object>) value;
-            for (Object nestedValue : list) {
-                params.addAll(getParamsList(String.format("%s[]", key), nestedValue));
+            List list = (List) value;
+            int listSize = list.size();
+            for (int nestedValueIndex = 0; nestedValueIndex < listSize; nestedValueIndex++) {
+                params.addAll(getParamsList(String.format("%s[%d]", key, nestedValueIndex), list.get(nestedValueIndex)));
             }
         } else if (value instanceof Object[]) {
             Object[] array = (Object[]) value;
-            for (Object nestedValue : array) {
-                params.addAll(getParamsList(String.format("%s[]", key), nestedValue));
+            int arrayLength = array.length;
+            for (int nestedValueIndex = 0; nestedValueIndex < arrayLength; nestedValueIndex++) {
+                params.addAll(getParamsList(String.format("%s[%d]", key, nestedValueIndex), array[nestedValueIndex]));
             }
         } else if (value instanceof Set) {
-            Set<Object> set = (Set<Object>) value;
+            Set set = (Set) value;
             for (Object nestedValue : set) {
                 params.addAll(getParamsList(key, nestedValue));
             }
-        } else if (value instanceof String) {
-            params.add(new BasicNameValuePair(key, (String) value));
+        } else {
+            params.add(new BasicNameValuePair(key, value.toString()));
         }
         return params;
     }
 
     protected String getParamString() {
-        return URLEncodedUtils.format(getParamsList(), HTTP.UTF_8);
+        return URLEncodedUtils.format(getParamsList(), contentEncoding);
     }
 
-    private static class FileWrapper {
-        public File file;
-        public String contentType;
+    public static class FileWrapper {
+        public final File file;
+        public final String contentType;
+        public final String customFileName;
 
-        public FileWrapper(File file, String contentType) {
+        public FileWrapper(File file, String contentType, String customFileName) {
             this.file = file;
             this.contentType = contentType;
+            this.customFileName = customFileName;
         }
     }
 
-    private static class StreamWrapper {
-        public InputStream inputStream;
-        public String name;
-        public String contentType;
+    public static class StreamWrapper {
+        public final InputStream inputStream;
+        public final String name;
+        public final String contentType;
+        public final boolean autoClose;
 
-        public StreamWrapper(InputStream inputStream, String name, String contentType) {
+        public StreamWrapper(InputStream inputStream, String name, String contentType, boolean autoClose) {
             this.inputStream = inputStream;
             this.name = name;
             this.contentType = contentType;
+            this.autoClose = autoClose;
+        }
+
+        static StreamWrapper newInstance(InputStream inputStream, String name, String contentType, boolean autoClose) {
+            return new StreamWrapper(
+                    inputStream,
+                    name,
+                    contentType == null ? APPLICATION_OCTET_STREAM : contentType,
+                    autoClose);
         }
     }
 }

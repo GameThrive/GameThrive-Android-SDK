@@ -36,17 +36,18 @@ import org.json.JSONTokener;
  * Additionally, you can override the other event methods from the parent class.
  */
 public class JsonHttpResponseHandler extends TextHttpResponseHandler {
+
     private static final String LOG_TAG = "JsonHttpResponseHandler";
 
     /**
-     * Creates new JsonHttpResponseHandler, with Json String encoding UTF-8
+     * Creates new JsonHttpResponseHandler, with JSON String encoding UTF-8
      */
     public JsonHttpResponseHandler() {
         super(DEFAULT_CHARSET);
     }
 
     /**
-     * Creates new JsonHttpRespnseHandler with given Json String encoding
+     * Creates new JsonHttpRespnseHandler with given JSON String encoding
      *
      * @param encoding String encoding to be used when parsing JSON
      */
@@ -62,7 +63,7 @@ public class JsonHttpResponseHandler extends TextHttpResponseHandler {
      * @param response   parsed response if any
      */
     public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-
+        Log.w(LOG_TAG, "onSuccess(int, Header[], JSONObject) was not overriden, but callback was received");
     }
 
     /**
@@ -73,7 +74,7 @@ public class JsonHttpResponseHandler extends TextHttpResponseHandler {
      * @param response   parsed response if any
      */
     public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
-
+        Log.w(LOG_TAG, "onSuccess(int, Header[], JSONArray) was not overriden, but callback was received");
     }
 
     /**
@@ -85,7 +86,7 @@ public class JsonHttpResponseHandler extends TextHttpResponseHandler {
      * @param errorResponse parsed response if any
      */
     public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-
+        Log.w(LOG_TAG, "onFailure(int, Header[], Throwable, JSONObject) was not overriden, but callback was received", throwable);
     }
 
     /**
@@ -97,17 +98,17 @@ public class JsonHttpResponseHandler extends TextHttpResponseHandler {
      * @param errorResponse parsed response if any
      */
     public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONArray errorResponse) {
-
+        Log.w(LOG_TAG, "onFailure(int, Header[], Throwable, JSONArray) was not overriden, but callback was received", throwable);
     }
 
     @Override
     public void onFailure(int statusCode, Header[] headers, String responseString, Throwable throwable) {
-
+        Log.w(LOG_TAG, "onFailure(int, Header[], String, Throwable) was not overriden, but callback was received", throwable);
     }
 
     @Override
     public void onSuccess(int statusCode, Header[] headers, String responseString) {
-
+        Log.w(LOG_TAG, "onSuccess(int, Header[], String) was not overriden, but callback was received");
     }
 
     @Override
@@ -226,10 +227,13 @@ public class JsonHttpResponseHandler extends TextHttpResponseHandler {
         if (null == responseBody)
             return null;
         Object result = null;
-        //trim the string to prevent start with blank, and test if the string is valid JSON, because the parser don't do this :(. If Json is not valid this will return null
+        //trim the string to prevent start with blank, and test if the string is valid JSON, because the parser don't do this :(. If JSON is not valid this will return null
         String jsonString = getResponseString(responseBody, getCharset());
         if (jsonString != null) {
             jsonString = jsonString.trim();
+            if (jsonString.startsWith(UTF8_BOM)) {
+                jsonString = jsonString.substring(1);
+            }
             if (jsonString.startsWith("{") || jsonString.startsWith("[")) {
                 result = new JSONTokener(jsonString).nextValue();
             }
