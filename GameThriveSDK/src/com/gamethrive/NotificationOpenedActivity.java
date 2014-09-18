@@ -17,6 +17,7 @@
 package com.gamethrive;
 
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.Intent;
 import android.os.Bundle;
 
@@ -24,14 +25,25 @@ public class NotificationOpenedActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		GameThrive.handleNotificationOpened(this, getIntent().getBundleExtra("data"));
-		finish();
+		processNotification();
 	}
 	
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        GameThrive.handleNotificationOpened(this, getIntent().getBundleExtra("data"));
-        finish();
+        processNotification();
+    }
+    
+    private void processNotification() {
+    	Intent intent = getIntent();
+    	int notificationId = intent.getIntExtra("notificationId", 0);
+    	
+    	if (notificationId != 0) { // Pressed an action button need to clear the notification manually
+	        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+	        notificationManager.cancel(notificationId);
+    	}
+        
+		GameThrive.handleNotificationOpened(this, intent.getBundleExtra("data"));
+		finish();
     }
 }

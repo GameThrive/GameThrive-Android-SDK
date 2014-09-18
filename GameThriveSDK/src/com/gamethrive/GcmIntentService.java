@@ -19,6 +19,12 @@
 
 package com.gamethrive;
 
+import java.util.Random;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 
 import android.app.IntentService;
@@ -32,7 +38,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Looper;
 import android.support.v4.app.NotificationCompat;
-import android.util.Log;
 
 /**
  * This {@code IntentService} does the actual handling of the GCM message.
@@ -42,9 +47,8 @@ import android.util.Log;
  * wake lock.
  */
 public class GcmIntentService extends IntentService {
-    public static final int NOTIFICATION_ID = 1;
+    private static final String DEFAULT_ACTION = "__DEFAULT__";
     private NotificationManager mNotificationManager;
-    NotificationCompat.Builder builder;
 
     public GcmIntentService() {
         super("GcmIntentService");
@@ -54,61 +58,101 @@ public class GcmIntentService extends IntentService {
 
     @Override
     protected void onHandleIntent(final Intent intent) {
-    	Log.i(TAG, "onHandleIntent");
         Bundle extras = intent.getExtras();
         GoogleCloudMessaging gcm = GoogleCloudMessaging.getInstance(this);
-        // The getMessageType() intent parameter must be the intent you received
-        // in your BroadcastReceiver.
-        String messageType = gcm.getMessageType(intent);
         
-        if (!extras.isEmpty()) {  // has effect of unparcelling Bundle
-            /*
-             * Filter messages based on message type. Since it is likely that GCM will be
-             * extended in the future with new message types, just ignore any message types you're
-             * not interested in, or that you don't recognize.
-             */
-        	 if (GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(messageType)) {
-        		 if (GameThrive.instance != null && GameThrive.instance.isForeground()) {
-        			 // This IntentService is meant to be short lived. Make a new thread to do our GameThrive work on.
-        			 new Thread(new Runnable() {
-        			       public void run() {
-        			    	   Looper.prepare();
-        			    	   GameThrive.instance.handleNotificationOpened(intent.getExtras());
-        		            }
-        		        }).start();
-        		 }
-        		 else {
-	        		 // Post notification of received message.
-	                 sendNotification(extras);
-        		 }
-             }
-        }
+    	if (GoogleCloudMessaging.MESSAGE_TYPE_MESSAGE.equals(gcm.getMessageType(intent)) && !extras.isEmpty()) {
+        	PrepareBundle(extras);
+        	
+        	// If GameThrive has been initialized and the app is in focus skip the notification creation and handle everything like it was opened. 
+    		if (GameThrive.instance != null && GameThrive.instance.isForeground()) {
+            	final Bundle finalExtras = extras;
+    			// This IntentService is meant to be short lived. Make a new thread to do our GameThrive work on.
+    			new Thread(new Runnable() {
+    				public void run() {
+    					GameThrive.instance.handleNotificationOpened(finalExtras);
+    				}
+    			}).start();
+    		 }
+    		 else // Create notification from the GCM message.
+                 sendNotification(extras);
+         }
+        
         // Release the wake lock provided by the WakefulBroadcastReceiver.
         GcmBroadcastReceiver.completeWakefulIntent(intent);
     }
     
+    // Format our short keys into more readable ones.
+    private void PrepareBundle(Bundle gcmBundle) {
+    	if (gcmBundle.containsKey("o")) {
+			try {
+		    	JSONObject customJSON = new JSONObject(gcmBundle.getString("custom"));
+		    	JSONObject additionalDataJSON;
+		    	
+		    	if (customJSON.has("a"))
+					additionalDataJSON = customJSON.getJSONObject("a");
+		   		else
+		   			additionalDataJSON = new JSONObject();
+		    	
+		    	JSONArray buttons = new JSONArray(gcmBundle.getString("o"));
+		    	gcmBundle.remove("o");
+		    	for(int i = 0; i < buttons.length(); i++) {
+		    		JSONObject button = buttons.getJSONObject(i);
+		    		
+		    		String buttonText = button.getString("n");
+		    		button.remove("n");
+		    		String buttonId;
+		    		if (button.has("i")){
+		    			buttonId = button.getString("i");
+		    			button.remove("i");
+		    		}
+		    		else
+		    			buttonId = buttonText;
+		    		
+		    		button.put("id", buttonId);
+		    		button.put("text", buttonText);
+		    	}
+		    	
+				additionalDataJSON.put("actionButtons", buttons);
+				additionalDataJSON.put("actionSelected", DEFAULT_ACTION);
+				if (!customJSON.has("a"))
+					customJSON.put("a", additionalDataJSON);
+		    	
+		    	gcmBundle.putString("custom", customJSON.toString());
+			} catch (JSONException e) {
+				e.printStackTrace();
+			}
+    	}
+    }
+    
+    private Intent getNewBaseIntent() {
+    	return new Intent(this, NotificationOpenedActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+    }
+    
     // Put the message into a notification and post it.
-    private void sendNotification(Bundle msg) {
-    	Log.i(TAG, "sendNotification:" + msg);
-        mNotificationManager = (NotificationManager)
-                this.getSystemService(Context.NOTIFICATION_SERVICE);
-
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 1000,
-                new Intent(this, NotificationOpenedActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("data", msg), PendingIntent.FLAG_UPDATE_CURRENT);
-
+    private void sendNotification(Bundle gcmBundle) {
+    	Random random = new Random();
+    	
+    	int intentId = random.nextInt();
+    	int notificationId = random.nextInt();
+    	
+        mNotificationManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+        
+        PendingIntent contentIntent = PendingIntent.getActivity(this, intentId, getNewBaseIntent().putExtra("data", gcmBundle), PendingIntent.FLAG_UPDATE_CURRENT);
+        
         int notificationDefaults = Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE;
         
-        NotificationCompat.Builder mBuilder =
-                new NotificationCompat.Builder(this)
-        .setAutoCancel(true)
-        .setSmallIcon(this.getApplicationInfo().icon)
-        .setContentTitle(getPackageManager().getApplicationLabel(getApplicationInfo()))
-        .setStyle(new NotificationCompat.BigTextStyle().bigText(msg.getString("alert")))
-        .setTicker(msg.getString("alert"))
-        .setContentText(msg.getString("alert"));
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this)
+	        .setAutoCancel(true)
+	        .setSmallIcon(this.getApplicationInfo().icon) // Small Icon required or notification doesn't display
+	        //.setLargeIcon(BitmapFactory.decodeResource(getResources(), getApplicationInfo().icon))
+	        .setContentTitle(getPackageManager().getApplicationLabel(getApplicationInfo()))
+	        .setStyle(new NotificationCompat.BigTextStyle().bigText(gcmBundle.getString("alert")))
+	        .setTicker(gcmBundle.getString("alert"))
+	        .setContentText(gcmBundle.getString("alert"));
         
-        if (msg.getString("sound") != null) {
-        	int soundId = getResources().getIdentifier(msg.getString("sound"), "raw", getPackageName());
+        if (gcmBundle.getString("sound") != null) {
+        	int soundId = getResources().getIdentifier(gcmBundle.getString("sound"), "raw", getPackageName());
         	if (soundId != 0)
         		mBuilder.setSound(Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/" + soundId));
         	else
@@ -118,8 +162,38 @@ public class GcmIntentService extends IntentService {
         	notificationDefaults |= Notification.DEFAULT_SOUND;
         
         mBuilder.setDefaults(notificationDefaults);
-
         mBuilder.setContentIntent(contentIntent);
-        mNotificationManager.notify(NOTIFICATION_ID, mBuilder.build());
+		
+		try {
+	        JSONObject customJson = new JSONObject(gcmBundle.getString("custom"));
+	        
+	        if (customJson.has("a")) {
+	        	JSONObject additionalDataJSON = customJson.getJSONObject("a");
+	        	if (additionalDataJSON.has("actionButtons")) {
+	        		
+	            	JSONArray buttons = additionalDataJSON.getJSONArray("actionButtons");
+    				
+            		for(int i = 0; i < buttons.length(); i++) {
+            			JSONObject button = buttons.getJSONObject(i);
+            			additionalDataJSON.put("actionSelected", button.getString("id"));
+            			
+            			Bundle bundle = new Bundle();
+            			bundle.putString("custom", customJson.toString());
+            			bundle.putString("alert", gcmBundle.getString("alert"));
+            			
+            			Intent buttonIntent = getNewBaseIntent();
+            			buttonIntent.setAction("" + i); // Required to keep each action button from replacing extras of each other
+            			buttonIntent.putExtra("notificationId", notificationId);
+            			buttonIntent.putExtra("data", bundle);
+            			PendingIntent buttonPIntent = PendingIntent.getActivity(this, notificationId, buttonIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+            			mBuilder.addAction(0, button.getString("text"), buttonPIntent);
+            		}
+	        	}
+	        }
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		
+        mNotificationManager.notify(notificationId, mBuilder.build());
     }
 }

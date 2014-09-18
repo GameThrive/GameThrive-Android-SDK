@@ -20,7 +20,6 @@
 package com.gamethrive;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -37,7 +36,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.content.res.Resources;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
@@ -299,7 +297,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "1.2.6");
+		    			jsonBody.put("sdk", "010300");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -352,7 +350,7 @@ public class GameThrive {
 		    					
 		    					@Override
 		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.i(TAG, "JSON Failed");
+		    						 Log.i(TAG, "JSON Create player Failed");
 		    						 throwable.printStackTrace();
 		    					 }
 
@@ -362,7 +360,7 @@ public class GameThrive {
 		    				GameThriveRestClient.postSync(appContext, "players/" + GetPlayerId() + "/on_session", jsonBody, new JsonHttpResponseHandler() {
 		    					@Override
 		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.i(TAG, "JSON Failed");
+		    						 Log.i(TAG, "JSON OnSession Failed");
 		    						 throwable.printStackTrace();
 		    					 }
 		    				});
@@ -487,7 +485,7 @@ public class GameThrive {
 			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, new JsonHttpResponseHandler() {
 				@Override
 				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-					 Log.i(TAG, "JSON Failed");
+					 Log.i(TAG, "JSON Send Purchase Failed");
 					 throwable.printStackTrace();
 				    }
 			});
@@ -542,6 +540,7 @@ public class GameThrive {
     	
     	// Open/Resume app when opening the notification.
         Intent launchIntent = inContext.getPackageManager().getLaunchIntentForPackage(inContext.getPackageName()).putExtra("data", data);
+        launchIntent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         inContext.startActivity(launchIntent);
         if (GameThrive.instance != null)
         	GameThrive.instance.runNotificationOpenedCallback(data, false, false);
@@ -566,7 +565,7 @@ public class GameThrive {
 			GameThriveRestClient.put(inContext, "notifications/" + customJson.getString("i"), jsonBody, new JsonHttpResponseHandler() {
 				@Override
 				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-					Log.i(TAG, "JSON Failed");
+					Log.i(TAG, "JSON Send Notification Opened Failed");
 					throwable.printStackTrace();
 				}
 			});

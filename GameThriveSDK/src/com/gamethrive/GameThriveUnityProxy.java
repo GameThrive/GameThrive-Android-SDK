@@ -34,6 +34,7 @@ public class GameThriveUnityProxy implements NotificationOpenedHandler {
 		unitylistenerName = listenerName;
 		
 		try {
+			// We use reflection here so the default proguard config does not get an error for native apps.
 			Class unityPlayerClass;
 			unityPlayerClass = Class.forName("com.unity3d.player.UnityPlayer");
 			unitySendMessage = unityPlayerClass.getMethod("UnitySendMessage", String.class, String.class, String.class);
