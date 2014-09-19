@@ -205,6 +205,7 @@ Interface containing the method `notificationOpened` which you can implement to 
    -  __Parameters__
      - __`String` _message___ - The message text the user seen in the notification.
      - __`JSONObject` _additionalData___ - Key value pairs that were set on the notification.
+      - NOTE: If you set Action Buttons on your notification the actionSelected key will contain the id of the button pressed; "\__DEFAULT\__" will be the id if the user tapped on the notification itself when buttons were present.
      - __`boolean` _isActive___ - True if your app was currently being used when a notification came in.
    
  
