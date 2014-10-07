@@ -27,6 +27,7 @@ import org.json.JSONObject;
 
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 
+import android.R.drawable;
 import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -140,11 +141,15 @@ public class GcmIntentService extends IntentService {
         
         PendingIntent contentIntent = PendingIntent.getActivity(this, intentId, getNewBaseIntent().putExtra("data", gcmBundle), PendingIntent.FLAG_UPDATE_CURRENT);
         
+        int notificationIcon = this.getApplicationInfo().icon;
+        if (notificationIcon == 0) // Catches case where icon isn't set in the AndroidManifest.xml
+        	notificationIcon = drawable.sym_def_app_icon;
+        
         int notificationDefaults = Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE;
         
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this)
 	        .setAutoCancel(true)
-	        .setSmallIcon(this.getApplicationInfo().icon) // Small Icon required or notification doesn't display
+	        .setSmallIcon(notificationIcon) // Small Icon required or notification doesn't display
 	        //.setLargeIcon(BitmapFactory.decodeResource(getResources(), getApplicationInfo().icon))
 	        .setContentTitle(getPackageManager().getApplicationLabel(getApplicationInfo()))
 	        .setStyle(new NotificationCompat.BigTextStyle().bigText(gcmBundle.getString("alert")))

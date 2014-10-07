@@ -8,14 +8,7 @@
         android:minSdkVersion="9"
         android:targetSdkVersion="19" />
     
-    <!-- START: GameThrive Permissions -->
-    <!-- Required if you want notifications to be delivered on time.
-    	 Without this there might be longer delays when the device's screen is off. -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Required so the device vibrates on receiving a push notification.
-    	 Vibration settings of the device still apply. -->
-    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- ##START## GameThrive Permissions -->
     
     <!-- INTERNET and c2dm RECEIVE are basic requirements for push messages from Google. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -24,7 +17,16 @@
     <!-- Create a unique permission for your app and use it so only your app can receive your GameThrive messages. -->
     <permission android:name="com.hiptic.gamethriveexample.permission.C2D_MESSAGE" android:protectionLevel="signature" />
     <uses-permission android:name="com.hiptic.gamethriveexample.permission.C2D_MESSAGE" />
-    <!-- END: GameThrive Permissions -->
+    
+    <!-- Required if you want notifications to be delivered on time.
+    	 Without this there might be longer delays when the device's screen is off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Required so the device vibrates on receiving a push notification.
+    	 Vibration settings of the device still apply. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- ##END## GameThrive Permissions -->
 
     <application
         android:icon="@drawable/ic_launcher"
@@ -43,7 +45,7 @@
         </activity>
         
         <!-- Application tag requirements below for GameThrive -->
-        <!-- START: GameThrive -->
+        <!-- ##START## GameThrive -->
         <meta-data android:name="com.google.android.gms.version"
            android:value="@integer/google_play_services_version" />
         
@@ -58,7 +60,7 @@
          	</intent-filter>
      	</receiver>
      	<service android:name="com.gamethrive.GcmIntentService" />
-     	<!-- END: GameThrive -->
+     	<!-- ##END## GameThrive -->
      	
     </application>
 </manifest>

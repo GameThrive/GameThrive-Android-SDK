@@ -87,6 +87,10 @@ public class GameThrive {
 	
 	private static String lastNotificationIdOpenned;
 	
+	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
+		this(context, googleProjectNumber, gameThriveAppId, null);
+	}
+	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId, NotificationOpenedHandler notificationOpenedHandler) {
 		instance = this;
 		this.googleProjectNumber = googleProjectNumber;
@@ -116,6 +120,7 @@ public class GameThrive {
             registerPlayer();
         }
         
+        // Called from tapping on a Notification from the status bar when the activity is completely dead and not open in any state.
         if (appContext.getIntent() != null && appContext.getIntent().getBundleExtra("data") != null)
         	runNotificationOpenedCallback(appContext.getIntent().getBundleExtra("data"), false, true);
 	}
@@ -297,7 +302,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "010300");
+		    			jsonBody.put("sdk", "010301");
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -477,6 +482,9 @@ public class GameThrive {
     }
     
     public void sendPurchase(BigDecimal amount) {
+    	if (GetPlayerId() == null)
+    		return;
+    	
     	try {
 			JSONObject jsonBody = new JSONObject();
 			jsonBody.put("app_id", appId);
@@ -511,30 +519,32 @@ public class GameThrive {
     			 appContext.startActivity(browserIntent);
     		 }
     		 
-    		 Runnable callBack = new Runnable() {
-    			 @Override
-    			 public void run() {
-        			 notificationOpenedHandler.notificationOpened(data.getString("alert"), additionalDataJSON, isActive);
-    			 }
-    		 };
-    		 
-    		 if (isUiThread)
-    			 callBack.run();
-    		 else
-    			 appContext.runOnUiThread(callBack);
+    		 if (notificationOpenedHandler != null) {
+	    		 Runnable callBack = new Runnable() {
+	    			 @Override
+	    			 public void run() {
+	        			 notificationOpenedHandler.notificationOpened(data.getString("alert"), additionalDataJSON, isActive);
+	    			 }
+	    		 };
+	    		 
+	    		 if (isUiThread)
+	    			 callBack.run();
+	    		 else
+	    			 appContext.runOnUiThread(callBack);
+    		 }
 		} catch (JSONException e) {
 			e.printStackTrace();
 		}
     }
     
     
-    // Called when receiving GCM message when app was open.
+    // Called when receiving GCM message when app is open and in focus.
     void handleNotificationOpened(Bundle data) {
     	sendNotificationOpened(appContext, data);
     	runNotificationOpenedCallback(data, true, false);
     }
     
-    // Call from tapping on a Notification from the status bar
+    // Call from tapping on a Notification from the status bar when the app is suspended in the background.
     static void handleNotificationOpened(Context inContext, Bundle data) {
     	sendNotificationOpened(inContext, data);
     	
