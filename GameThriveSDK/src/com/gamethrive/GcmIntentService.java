@@ -37,7 +37,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Looper;
 import android.support.v4.app.NotificationCompat;
 
 /**
@@ -141,9 +140,16 @@ public class GcmIntentService extends IntentService {
         
         PendingIntent contentIntent = PendingIntent.getActivity(this, intentId, getNewBaseIntent().putExtra("data", gcmBundle), PendingIntent.FLAG_UPDATE_CURRENT);
         
-        int notificationIcon = this.getApplicationInfo().icon;
-        if (notificationIcon == 0) // Catches case where icon isn't set in the AndroidManifest.xml
-        	notificationIcon = drawable.sym_def_app_icon;
+        int notificationIcon = getResources().getIdentifier("gamethrive_statusbar_icon_default", "drawable", getPackageName());
+        
+        if (notificationIcon == 0)
+        	notificationIcon = getResources().getIdentifier("corona_statusbar_icon_default", "drawable", getPackageName());
+        
+        if (notificationIcon == 0) {
+	        notificationIcon = this.getApplicationInfo().icon;
+	        if (notificationIcon == 0) // Catches case where icon isn't set in the AndroidManifest.xml
+	        	notificationIcon = drawable.sym_def_app_icon;
+        }
         
         int notificationDefaults = Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE;
         

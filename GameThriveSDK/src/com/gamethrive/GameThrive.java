@@ -86,6 +86,10 @@ public class GameThrive {
 	private long lastTrackedTime;
 	
 	private static String lastNotificationIdOpenned;
+	private TrackPlayerPurchase trackPurchase;
+	
+	public static final int VERSION = 010400;
+	public static final String STRING_VERSION = "010400";
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
 		this(context, googleProjectNumber, gameThriveAppId, null);
@@ -123,6 +127,9 @@ public class GameThrive {
         // Called from tapping on a Notification from the status bar when the activity is completely dead and not open in any state.
         if (appContext.getIntent() != null && appContext.getIntent().getBundleExtra("data") != null)
         	runNotificationOpenedCallback(appContext.getIntent().getBundleExtra("data"), false, true);
+        
+        if (TrackPlayerPurchase.CanTrack(appContext))
+        	trackPurchase = new TrackPlayerPurchase(appContext, this);
 	}
 	
 	/**
@@ -168,6 +175,9 @@ public class GameThrive {
     public void onResumed() {
     	foreground = true;
     	lastTrackedTime = SystemClock.elapsedRealtime();
+    	
+    	if (trackPurchase != null)
+    		trackPurchase.trackIAP();
     }
     
     boolean isForeground() {
@@ -264,8 +274,7 @@ public class GameThrive {
 		id = getPhoneId();
 		if (id != null)
 			return id;
-
-		// Wifi is more consistent than the Android ID but Corona's deviceID falls back to this
+		
 		id = getAndroidId();
 		if (id != null)
 			return id;
@@ -302,7 +311,7 @@ public class GameThrive {
 		    			jsonBody.put("device_model", android.os.Build.MODEL);
 		    			jsonBody.put("timezone", Calendar.getInstance().getTimeZone().getRawOffset() / 1000); // converting from milliseconds to seconds
 		    			jsonBody.put("language", Locale.getDefault().getLanguage());
-		    			jsonBody.put("sdk", "010301");
+		    			jsonBody.put("sdk", STRING_VERSION);
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
@@ -477,29 +486,40 @@ public class GameThrive {
     		this.idsAvailableHandler = idsAvailableHandler;
     }
     
+    /**
+     * Call when player makes an IAP purchase in your app with the amount in USD.
+     *
+     * @deprecated Automatically tracked.
+     * @Deprecated Automatically tracked.
+     */
     public void sendPurchase(double amount) {
-    	sendPurchase(new BigDecimal(amount));
+    	Log.i(TAG, "sendPurchase is deprecated as this is now automatic for Google Play IAP purchases. The method does nothing!");
     }
     
+    /**
+     * Call when player makes an IAP purchase in your app with the amount in USD.
+     *
+     * @deprecated Automatically tracked.
+     * @Deprecated Automatically tracked.
+     */
     public void sendPurchase(BigDecimal amount) {
+    	Log.i(TAG, "sendPurchase is deprecated as this is now automatic for Google Play IAP purchases. The method does nothing!");
+    }
+    
+    void sendPurchases(JSONArray purchases, boolean newAsExisting, ResponseHandlerInterface httpHandler) {
     	if (GetPlayerId() == null)
     		return;
     	
     	try {
-			JSONObject jsonBody = new JSONObject();
-			jsonBody.put("app_id", appId);
-			jsonBody.put("amount", amount);
-			
-			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, new JsonHttpResponseHandler() {
-				@Override
-				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-					 Log.i(TAG, "JSON Send Purchase Failed");
-					 throwable.printStackTrace();
-				    }
-			});
-		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
-			e.printStackTrace();
-		}
+    		JSONObject jsonBody = new JSONObject();
+    		jsonBody.put("app_id", appId);
+    		if (newAsExisting)
+    			jsonBody.put("existing", true);
+    		jsonBody.put("purchases", purchases);
+    		GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, httpHandler);
+    	} catch (Throwable e) { // JSONException and UnsupportedEncodingException
+    		e.printStackTrace();
+    	}
     }
     
     private void runNotificationOpenedCallback(final Bundle data, final boolean isActive, boolean isUiThread) {
@@ -606,7 +626,7 @@ public class GameThrive {
 		return prefs.getString("GT_PLAYER_ID", null);
     }
     
-    public String GetPlayerId() {
+    String GetPlayerId() {
     	if (playerId == null) {
     		final SharedPreferences prefs = getGcmPreferences(appContext);
     		playerId = prefs.getString("GT_PLAYER_ID", null);

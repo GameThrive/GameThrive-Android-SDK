@@ -44,7 +44,7 @@ class GameThriveRestClient {
 	  clientSync.setMaxRetriesAndTimeout(3, TIMEOUT);
   }
   
-  static void put(final Context context, final String url, JSONObject jsonBody, final AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+  static void put(final Context context, final String url, JSONObject jsonBody, final ResponseHandlerInterface responseHandler) throws UnsupportedEncodingException {
 	  final StringEntity entity = new StringEntity(jsonBody.toString());
 	  
 	  new Thread(new Runnable() {
@@ -54,7 +54,7 @@ class GameThriveRestClient {
 	  }).start();
   }
 
-  static void post(final Context context, final String url, JSONObject jsonBody, final AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+  static void post(final Context context, final String url, JSONObject jsonBody, final ResponseHandlerInterface responseHandler) throws UnsupportedEncodingException {
 	  final StringEntity entity = new StringEntity(jsonBody.toString());
 	  
 	  new Thread(new Runnable() {
@@ -64,7 +64,7 @@ class GameThriveRestClient {
 	  }).start();
   }
   
-  static void get(final Context context, final String url, final AsyncHttpResponseHandler responseHandler) {
+  static void get(final Context context, final String url, final ResponseHandlerInterface responseHandler) {
 	  new Thread(new Runnable() {
 	      public void run() {
 	    	  clientSync.get(context, BASE_URL + url, responseHandler);
@@ -72,12 +72,12 @@ class GameThriveRestClient {
 	  }).start();
   }
   
-  static void putSync(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+  static void putSync(Context context, String url, JSONObject jsonBody, ResponseHandlerInterface responseHandler) throws UnsupportedEncodingException {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
 	  clientSync.put(context, BASE_URL + url, entity, "application/json", responseHandler);
   }
 
-  static void postSync(Context context, String url, JSONObject jsonBody, AsyncHttpResponseHandler responseHandler) throws UnsupportedEncodingException {
+  static void postSync(Context context, String url, JSONObject jsonBody, ResponseHandlerInterface responseHandler) throws UnsupportedEncodingException {
 	  StringEntity entity = new StringEntity(jsonBody.toString());
 	  clientSync.post(context, BASE_URL + url, entity, "application/json", responseHandler);
   }
