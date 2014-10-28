@@ -53,6 +53,7 @@ import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.gcm.GoogleCloudMessaging;
 import com.loopj.android.http.*;
+import com.stericson.RootTools.internal.RootToolsInternalMethods;
 
 public class GameThrive {
     
@@ -88,8 +89,8 @@ public class GameThrive {
 	private static String lastNotificationIdOpenned;
 	private TrackPlayerPurchase trackPurchase;
 	
-	public static final int VERSION = 010400;
-	public static final String STRING_VERSION = "010400";
+	public static final int VERSION = 010401;
+	public static final String STRING_VERSION = "010401";
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
 		this(context, googleProjectNumber, gameThriveAppId, null);
@@ -316,6 +317,9 @@ public class GameThrive {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
 		    			}
 		    			catch (PackageManager.NameNotFoundException e) {}
+		    			
+		    			if (RootToolsInternalMethods.isRooted())
+		    				jsonBody.put("rooted", true);
 		    			
 		    			try {
 			    			Field[] fields = Class.forName(appContext.getPackageName() + ".R$raw").getFields();
