@@ -8,20 +8,27 @@
         android:id="@+id/buttonTag"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/textView1"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="23dp"
         android:onClick="sendTag"
         android:text="Send Tag" />
 
     <Button
-        android:id="@+id/ButtonPurchase"
+        android:id="@+id/ButtonGetIds"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/buttonTag"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="21dp"
-        android:onClick="sendPurchase"
-        android:text="SendPurchase" />
+        android:onClick="getIds"
+        android:text="Get Ids" />
+
+    <TextView
+        android:id="@+id/textViewIds"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/ButtonGetIds"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="52dp" />
 
 </RelativeLayout>

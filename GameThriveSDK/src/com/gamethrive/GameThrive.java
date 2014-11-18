@@ -89,8 +89,8 @@ public class GameThrive {
 	private static String lastNotificationIdOpenned;
 	private TrackPlayerPurchase trackPurchase;
 	
-	public static final int VERSION = 010401;
-	public static final String STRING_VERSION = "010401";
+	public static final int VERSION = 010402;
+	public static final String STRING_VERSION = "010402";
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
 		this(context, googleProjectNumber, gameThriveAppId, null);

@@ -22,10 +22,13 @@ import org.json.JSONObject;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
 
 import com.gamethrive.GameThrive;
 import com.gamethrive.NotificationOpenedHandler;
+import com.gamethrive.GameThrive.IdsAvailableHandler;
 
 public class MainActivity extends Activity {
 	
@@ -40,7 +43,7 @@ public class MainActivity extends Activity {
 		setContentView(R.layout.activity_main);
 		currentActivity = this;
 		
-		// Pass in your app's Context, Google Project number, your GameThrive App ID, and a NotificationOpenedHandler
+		// Pass in your app's Context, Google Project number, GameThrive App ID, and a NotificationOpenedHandler
 		if (gameThrive == null)
 			gameThrive = new GameThrive(this, "703322744261", "5eb5a37e-b458-11e3-ac11-000c2940e62c", new ExampleNotificationOpenedHandler());
 	}
@@ -51,8 +54,18 @@ public class MainActivity extends Activity {
 	}
 	
 	// activity_main.xml defines the link to this method from the button.
-	public void sendPurchase(View view) {
-		gameThrive.sendPurchase(12.34);
+	public void getIds(View view) {
+		gameThrive.idsAvailable(new IdsAvailableHandler() {
+			@Override
+			public void idsAvailable(String playerId, String registrationId) {
+				TextView textView = (TextView) findViewById(R.id.textViewIds);
+				String labelStr = "PlayerId: " + playerId;
+				if (registrationId != null)
+					labelStr += "\n\nRegistrationId: " + registrationId;
+				textView.setText(labelStr);
+				Log.i("GameThriveExample", labelStr + "\n");
+			}
+		});
 	}
 	
 	// onPause and onResume hooks are required so GameThrive knows when to create a notification and when to just call your callback and playtime for segmentation.

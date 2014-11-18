@@ -151,13 +151,17 @@ public class GcmIntentService extends IntentService {
 	        	notificationIcon = drawable.sym_def_app_icon;
         }
         
+        CharSequence title = gcmBundle.getString("title");
+        if (title == null)
+        	title = getPackageManager().getApplicationLabel(getApplicationInfo());
+        
         int notificationDefaults = Notification.DEFAULT_LIGHTS | Notification.DEFAULT_VIBRATE;
         
         NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this)
 	        .setAutoCancel(true)
 	        .setSmallIcon(notificationIcon) // Small Icon required or notification doesn't display
 	        //.setLargeIcon(BitmapFactory.decodeResource(getResources(), getApplicationInfo().icon))
-	        .setContentTitle(getPackageManager().getApplicationLabel(getApplicationInfo()))
+	        .setContentTitle(title)
 	        .setStyle(new NotificationCompat.BigTextStyle().bigText(gcmBundle.getString("alert")))
 	        .setTicker(gcmBundle.getString("alert"))
 	        .setContentText(gcmBundle.getString("alert"));
