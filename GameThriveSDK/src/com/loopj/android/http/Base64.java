@@ -18,8 +18,6 @@ package com.loopj.android.http;
 
 import java.io.UnsupportedEncodingException;
 
-import com.hiptic.gamethrivesdk.BuildConfig;
-
 /**
  * Utilities for encoding and decoding the Base64 representation of binary data.  See RFCs <a
  * href="http://www.ietf.org/rfc/rfc2045.txt">2045</a> and <a href="http://www.ietf.org/rfc/rfc3548.txt">3548</a>.
@@ -512,9 +510,10 @@ public class Base64 {
         encoder.output = new byte[output_len];
         encoder.process(input, offset, len, true);
 
-        if (BuildConfig.DEBUG && encoder.op != output_len) {
-            throw new AssertionError();
-        }
+        // IF Debug
+//        if (BuildConfig.DEBUG && encoder.op != output_len) {
+//            throw new AssertionError();
+//        }
 
         return encoder.output;
     }
@@ -693,9 +692,10 @@ public class Base64 {
                     output[op++] = '\n';
                 }
 
-                if (BuildConfig.DEBUG && (tailLen != 0 || p != len)) {
-                    throw new AssertionError();
-                }
+                // IF DEBUG
+//                if (BuildConfig.DEBUG && (tailLen != 0 || p != len)) {
+//                    throw new AssertionError();
+//                }
             } else {
                 // Save the leftovers in tail to be consumed on the next
                 // call to encodeInternal.

@@ -19,13 +19,13 @@
 
 package com.gamethrive;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Locale;
 
 import org.apache.http.Header;
@@ -37,21 +37,11 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.provider.Settings;
-import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.util.TypedValue;
 
-import com.google.android.gms.ads.identifier.AdvertisingIdClient;
-import com.google.android.gms.ads.identifier.AdvertisingIdClient.Info;
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
-import com.google.android.gms.common.GooglePlayServicesRepairableException;
-import com.google.android.gms.common.GooglePlayServicesUtil;
-import com.google.android.gms.gcm.GoogleCloudMessaging;
 import com.loopj.android.http.*;
 import com.stericson.RootTools.internal.RootToolsInternalMethods;
 
@@ -70,9 +60,8 @@ public class GameThrive {
      */
     static final String TAG = "GameThrive";
 	
-	private String googleProjectNumber, appId;
+	private String appId;
 	private Activity appContext;
-	private GoogleCloudMessaging gcm;
 	
 	private String registrationId, playerId = null;
 	private JSONObject pendingTags;
@@ -89,8 +78,11 @@ public class GameThrive {
 	private static String lastNotificationIdOpenned;
 	private TrackPlayerPurchase trackPurchase;
 	
-	public static final int VERSION = 010402;
-	public static final String STRING_VERSION = "010402";
+	public static final int VERSION = 010500;
+	public static final String STRING_VERSION = "010500";
+	
+	private PushRegistrator pushRegistrator = new PushRegistratorGPS();
+	private AdvertisingIdentifierProvider mainAdIdProvider = new AdvertisingIdProviderGPS();
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
 		this(context, googleProjectNumber, gameThriveAppId, null);
@@ -98,7 +90,6 @@ public class GameThrive {
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId, NotificationOpenedHandler notificationOpenedHandler) {
 		instance = this;
-		this.googleProjectNumber = googleProjectNumber;
 		appId = gameThriveAppId;
 		appContext = context;
 		this.notificationOpenedHandler = notificationOpenedHandler;
@@ -113,17 +104,15 @@ public class GameThrive {
 				SaveAppId(appId);
 			}
 		}
-		else 
+		else
 			SaveAppId(appId);
 		
-		// Check device for Play Services APK. If check succeeds, proceed with GCM registration.
-        if (checkPlayServices()) {
-            gcm = GoogleCloudMessaging.getInstance(appContext);
-            registerInBackground();
-        } else {
-            Log.i(TAG, "No valid Google Play Services APK found.");
-            registerPlayer();
-        }
+		pushRegistrator.registerForPush(appContext, googleProjectNumber, new PushRegistrator.RegisteredHandler() {
+			@Override
+			public void complete(String id) {
+                registerPlayer(id);
+			}
+		});
         
         // Called from tapping on a Notification from the status bar when the activity is completely dead and not open in any state.
         if (appContext.getIntent() != null && appContext.getIntent().getBundleExtra("data") != null)
@@ -132,20 +121,6 @@ public class GameThrive {
         if (TrackPlayerPurchase.CanTrack(appContext))
         	trackPurchase = new TrackPlayerPurchase(appContext, this);
 	}
-	
-	/**
-     * Check the device to make sure it has the Google Play Services APK. If
-     * it doesn't, display a dialog that allows users to download the APK from
-     * the Google Play Store or enable it in the device's system settings.
-     */
-    private boolean checkPlayServices() {
-        int resultCode = GooglePlayServicesUtil.isGooglePlayServicesAvailable(appContext);
-        if (resultCode != ConnectionResult.SUCCESS) {
-            Log.i(TAG, "Google Player error: This device is not supported. Code:" + resultCode);
-            return false;
-        }
-        return true;
-    }
     
     public void onPaused() {
     	foreground = false;
@@ -184,110 +159,11 @@ public class GameThrive {
     boolean isForeground() {
     	return foreground;
     }
-    
-    /**
-     * Registers the application with GCM servers asynchronously.
-     */
-    private void registerInBackground() {
-    	new Thread(new Runnable() {
-    		public void run() {
-    			String msg = "";
-                try {
-                    if (gcm == null)
-                        gcm = GoogleCloudMessaging.getInstance(appContext);
-                    SaveRegistractionId(gcm.register(googleProjectNumber));
-                    msg = "Device registered, registration ID=" + registrationId;
-                } catch (IOException ex) {
-                    msg = "Error :" + ex.getMessage();
-                    // TODO: Retry with exponential back-off.
-                }
-                Log.i(TAG, msg + "\n");
-            	// If success or failure register the player with our server.
-                registerPlayer();
-            }
-        }).start();
-    }
-
-	// Do not call this function from the main thread. Otherwise, 
-	// an IllegalStateException will be thrown.
-	private String getAdvertisingId() {
-		try {
-			Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(appContext);
-			final String id = adInfo.getId();
-			final boolean isLAT = adInfo.isLimitAdTrackingEnabled();
-			if (isLAT)
-				return "OptedOut"; // Google restricts usage of the id to "build profiles" if the user checks opt out so we can't collect.
-			else
-				return id;
-		}
-		catch (IOException e) { Log.d("EXCEPTION", "IOException"); } // Unrecoverable error connecting to Google Play services (e.g., the old version of the service doesn't support getting AdvertisingId).
-		catch (GooglePlayServicesNotAvailableException e) { Log.d("EXCEPTION", "GooglePlayServicesNotAvailableException"); } // Google Play services is not available entirely.
-		//catch (IllegalStateException e) { Log.d("EXCEPTION", "IllegalStateException"); } // Unknown error
-		catch (GooglePlayServicesRepairableException e) { Log.d("EXCEPTION", "GooglePlayServicesRepairableException"); } // Google Play Services is not installed, up-to-date, or enabled
-
-		return null;
-	}
 	
-	// See links on alternative unique IDs for players
-	// http://technet.weblineindia.com/mobile/getting-unique-device-id-of-an-android-smartphone/
-	// http://stackoverflow.com/questions/2785485/is-there-a-unique-android-device-id
-
-	// Requires android.permission.READ_PHONE_STATE permission
-	private String getPhoneId()
-	{
-		try {
-			final String deviceId = ((TelephonyManager) appContext.getSystemService(Context.TELEPHONY_SERVICE)).getDeviceId();
-			return deviceId;
-		}
-		catch (RuntimeException e) {
-			return null;
-		}
-	}
-	
-	private String getAndroidId() {
-		try {
-			final String androidId = Settings.Secure.getString(appContext.getContentResolver(), Settings.Secure.ANDROID_ID);
-			// see http://code.google.com/p/android/issues/detail?id=10603 for info on this 'dup' id.
-			if (androidId != "9774d56d682e549c")
-				return androidId;
-		}
-		catch (RuntimeException e) {
-			return null;
-		}
-
-		return null;
-	}
-	
-	// Requires android.permission.ACCESS_WIFI_STATE permission
-	private String getWifiMac() {
-		try {
-			final String m_wlanMacAdd = ((WifiManager)appContext.getSystemService(Context.WIFI_SERVICE)).getConnectionInfo().getMacAddress();
-			return m_wlanMacAdd;
-		}
-		catch (RuntimeException e) {
-			return null;
-		}
-	}
-	
-	private String getAltId() {
-		String id;
-
-		id = getPhoneId();
-		if (id != null)
-			return id;
-		
-		id = getAndroidId();
-		if (id != null)
-			return id;
-		
-		id = getWifiMac();
-		if (id != null)
-			return id;
-
-		return null;
-	}
-    
-    private void registerPlayer() {
+    private void registerPlayer(String id) {
+    	if (id != null)
+    		SaveRegistractionId(id);
+    	
     	// Must run in its own thread due to the use of getAdvertisingId
     	 new Thread(new Runnable() {
 		       public void run() {
@@ -298,12 +174,13 @@ public class GameThrive {
 		    			if (registrationId != null)
 		    				jsonBody.put("identifier", registrationId);
 		    			
-		    			String adId = getAdvertisingId();
-		    			// "... must use the advertising ID (when available on a device) in lieu of any other device identifiers ..." - https://play.google.com/about/developer-content-policy.html
+		    			String adId = mainAdIdProvider.getIdentifier(appContext);
+		    			// "... must use the advertising ID (when available on a device) in lieu of any other device identifiers ..."
+		    			// https://play.google.com/about/developer-content-policy.html
 		    			if (adId != null)
 		    				jsonBody.put("ad_id", adId);
 		    			else {
-		    				adId = getAltId();
+		    				adId = new AdvertisingIdProviderFallback().getIdentifier(appContext);
 		    				if (adId != null)
 		    					jsonBody.put("ad_id", adId);
 		    			}
@@ -368,7 +245,7 @@ public class GameThrive {
 		    					
 		    					@Override
 		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.i(TAG, "JSON Create player Failed");
+		    						 Log.w(TAG, "JSON Create player Failed");
 		    						 throwable.printStackTrace();
 		    					 }
 
@@ -378,7 +255,7 @@ public class GameThrive {
 		    				GameThriveRestClient.postSync(appContext, "players/" + GetPlayerId() + "/on_session", jsonBody, new JsonHttpResponseHandler() {
 		    					@Override
 		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.i(TAG, "JSON OnSession Failed");
+		    						 Log.w(TAG, "JSON OnSession Failed");
 		    						 throwable.printStackTrace();
 		    					 }
 		    				});
@@ -418,7 +295,7 @@ public class GameThrive {
 				GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 					@Override
 					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-						 Log.i(TAG, "sendTags:JSON Failed");
+						 Log.w(TAG, "sendTags:JSON Failed");
 						 throwable.printStackTrace();
 					 }
 				});
@@ -446,7 +323,7 @@ public class GameThrive {
 			
 			@Override
 			public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-				Log.i(TAG, "getTags:JSON Failed");
+				Log.w(TAG, "getTags:JSON Failed");
 				throwable.printStackTrace();
 			}
 		});
@@ -474,7 +351,7 @@ public class GameThrive {
 			GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 				@Override
 				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-					 Log.i(TAG, "deleteTags:JSON Failed");
+					 Log.w(TAG, "deleteTags:JSON Failed");
 					 throwable.printStackTrace();
 				 }
 			});
@@ -529,25 +406,31 @@ public class GameThrive {
     private void runNotificationOpenedCallback(final Bundle data, final boolean isActive, boolean isUiThread) {
     	try {
     		 JSONObject customJSON = new JSONObject(data.getString("custom"));
-    		 final JSONObject additionalDataJSON;
+    		 JSONObject additionalDataJSON = null;
+    		 
     		 if (customJSON.has("a"))
     			 additionalDataJSON = customJSON.getJSONObject("a");
-    		 else
-    			 additionalDataJSON = null;
+    		 
+    		 if (data.containsKey("title")) {
+    			 if (additionalDataJSON == null)
+    				 additionalDataJSON = new JSONObject();
+    			 additionalDataJSON.put("title", data.getString("title"));
+    		 }
     		 
     		 if (!isActive && customJSON.has("u")) {
     			 String url = customJSON.getString("u");
 				 if (!url.startsWith("http://") && !url.startsWith("https://"))
-					   url = "http://" + url;
+					 url = "http://" + url;
     			 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
     			 appContext.startActivity(browserIntent);
     		 }
     		 
     		 if (notificationOpenedHandler != null) {
+        		 final JSONObject finalAdditionalDataJSON = additionalDataJSON;
 	    		 Runnable callBack = new Runnable() {
 	    			 @Override
 	    			 public void run() {
-	        			 notificationOpenedHandler.notificationOpened(data.getString("alert"), additionalDataJSON, isActive);
+	        			 notificationOpenedHandler.notificationOpened(data.getString("alert"), finalAdditionalDataJSON, isActive);
 	    			 }
 	    		 };
 	    		 
@@ -561,14 +444,13 @@ public class GameThrive {
 		}
     }
     
-    
     // Called when receiving GCM message when app is open and in focus.
     void handleNotificationOpened(Bundle data) {
     	sendNotificationOpened(appContext, data);
     	runNotificationOpenedCallback(data, true, false);
     }
     
-    // Call from tapping on a Notification from the status bar when the app is suspended in the background.
+    // Called when opening a notification when the app is suspended in the background.
     static void handleNotificationOpened(Context inContext, Bundle data) {
     	sendNotificationOpened(inContext, data);
     	
@@ -599,7 +481,7 @@ public class GameThrive {
 			GameThriveRestClient.put(inContext, "notifications/" + customJson.getString("i"), jsonBody, new JsonHttpResponseHandler() {
 				@Override
 				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-					Log.i(TAG, "JSON Send Notification Opened Failed");
+					Log.w(TAG, "JSON Send Notification Opened Failed");
 					throwable.printStackTrace();
 				}
 			});
@@ -661,8 +543,80 @@ public class GameThrive {
         editor.putString("GT_REGISTRATION_ID", registartionId);
         editor.commit();
 	}
-    
-    private static SharedPreferences getGcmPreferences(Context context) {
+	
+    static SharedPreferences getGcmPreferences(Context context) {
         return context.getSharedPreferences(GameThrive.class.getSimpleName(), Context.MODE_PRIVATE);
+    }
+	
+	private static LinkedList<String> notificationsReceivedStack;
+	
+	private static void GetNotificationsReceived(Context context) {
+		if (notificationsReceivedStack == null) {
+			notificationsReceivedStack = new LinkedList<String>();
+			
+			final SharedPreferences prefs = getGcmPreferences(context);
+    		String jsonListStr = prefs.getString("GT_RECEIVED_NOTIFICATION_LIST", null);
+    		
+    		if (jsonListStr != null) {
+    			try {
+    				JSONArray notificationsReceivedList = new JSONArray(jsonListStr);
+    				for (int i = 0; i < notificationsReceivedList.length(); i++)
+    					notificationsReceivedStack.push(notificationsReceivedList.getString(i));
+    			} catch (JSONException e) {
+    				e.printStackTrace();
+    			}
+    		}
+		}
+	}
+	
+	private static void AddNotificationIdToList(String id, Context context) {
+		GetNotificationsReceived(context);
+		if (notificationsReceivedStack == null)
+			return;
+		
+		if (notificationsReceivedStack.size() >= 10)
+			notificationsReceivedStack.removeLast();
+		
+		notificationsReceivedStack.addFirst(id);
+		
+		JSONArray jsonArray = new JSONArray();
+		String notificationId;
+		for(int i = notificationsReceivedStack.size() - 1; i > -1; i--) {
+			notificationId = notificationsReceivedStack.get(i);
+			if (notificationId == null)
+				continue;
+			jsonArray.put(notificationsReceivedStack.get(i));
+		}
+		
+		final SharedPreferences prefs = getGcmPreferences(context);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString("GT_RECEIVED_NOTIFICATION_LIST", jsonArray.toString());
+        editor.commit();
+	}
+	
+	static boolean isDuplicateNotification(String id, Context context) {
+		GetNotificationsReceived(context);
+		if (notificationsReceivedStack == null || id == null || "".equals(id))
+			return false;
+		
+		if (notificationsReceivedStack.contains(id))
+			return true;
+		
+		AddNotificationIdToList(id, context);
+		return false;
+	}
+	
+    static boolean isValidAndNotDuplicated(Context context, Bundle bundle) {
+    	if (bundle.isEmpty())
+    		return false;
+    	
+    	try {
+    		JSONObject customJSON = new JSONObject(bundle.getString("custom"));
+    		return !GameThrive.isDuplicateNotification(customJSON.getString("i"), context);
+    	} catch (Throwable t) {
+    		t.printStackTrace();
+    	}
+    	
+		return false;
     }
 }
