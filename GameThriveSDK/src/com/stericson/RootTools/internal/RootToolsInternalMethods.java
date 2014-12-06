@@ -1,4 +1,4 @@
-/* 
+/**
  * This file is part of the RootTools Project: http://code.google.com/p/roottools/
  *  
  * Copyright (c) 2012 Stephen Erickson, Chris Ravenscroft, Dominik Schuermann, Adam Shanks
