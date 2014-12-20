@@ -58,12 +58,17 @@ class PushRegistratorGPS implements PushRegistrator {
 		appContext = context;
 		registeredHandler = callback;
 		
-        if (checkPlayServices())
-            registerInBackground(googleProjectNumber);
-        else {
-            Log.i(GameThrive.TAG, "No valid Google Play services APK found.");
-            registeredHandler.complete(null);
-        }
+		try {
+	        if (checkPlayServices())
+	            registerInBackground(googleProjectNumber);
+	        else {
+	            Log.i(GameThrive.TAG, "No valid Google Play services APK found.");
+	            registeredHandler.complete(null);
+	        }
+		} catch (Throwable t) {
+			Log.e(GameThrive.TAG, "Could not register with GCM due to an error with the AndroidManifest.xml file or with 'Google Play services'.", t);
+			registeredHandler.complete(null);
+		}
 	}
 	
 	private boolean isGooglePlayStoreInstalled() {
@@ -110,7 +115,12 @@ class PushRegistratorGPS implements PushRegistrator {
 							public void onClick(DialogInterface dialog, int which) {
 								try {
 				                    GooglePlayServicesUtil.getErrorPendingIntent(resultCode, appContext, 0).send();
-				                } catch (CanceledException e) {}
+				                }
+								catch (CanceledException e) {}
+								catch (Throwable e) {
+									e.printStackTrace();
+								}
+								
 							}
         			   })
         			   .setNegativeButton("Skip", new OnClickListener() {

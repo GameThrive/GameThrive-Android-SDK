@@ -81,16 +81,19 @@ public class GameThrive {
 
 	private IdsAvailableHandler idsAvailableHandler;
 	
-	private long lastTrackedTime;
+	private long lastTrackedTime, unSentActiveTime = -1;
 	
 	private static String lastNotificationIdOpenned;
-	private TrackPlayerPurchase trackPurchase;
+	private TrackGooglePurchase trackGooglePurchase;
+	private TrackAmazonPurchase trackAmazonPurchase;
 	
-	public static final int VERSION = 010500;
-	public static final String STRING_VERSION = "010500";
+	public static final int VERSION = 010600;
+	public static final String STRING_VERSION = "010600";
 	
-	private PushRegistrator pushRegistrator = new PushRegistratorGPS();
+	private PushRegistrator pushRegistrator;
 	private AdvertisingIdentifierProvider mainAdIdProvider = new AdvertisingIdProviderGPS();
+	
+	private int deviceType;
 	
 	public GameThrive(Activity context, String googleProjectNumber, String gameThriveAppId) {
 		this(context, googleProjectNumber, gameThriveAppId, null);
@@ -102,6 +105,21 @@ public class GameThrive {
 		appContext = context;
 		this.notificationOpenedHandler = notificationOpenedHandler;
 		lastTrackedTime = SystemClock.elapsedRealtime();
+		
+		try {
+			Class.forName("com.amazon.device.iap.PurchasingListener");
+			trackAmazonPurchase = new TrackAmazonPurchase(appContext, this);
+		} catch (ClassNotFoundException e) {}
+		
+		try {
+		    Class.forName("com.amazon.device.messaging.ADM");
+		    pushRegistrator = new PushRegistratorADM();
+		    deviceType = 2;
+		}
+		catch (ClassNotFoundException e) {
+			pushRegistrator = new PushRegistratorGPS();
+			deviceType = 1;
+		}
 		
 		// Re-register player if the app id changed, this might happen when a dev is testing.
 		String oldAppId = GetSavedAppId();
@@ -126,12 +144,27 @@ public class GameThrive {
         if (appContext.getIntent() != null && appContext.getIntent().getBundleExtra("data") != null)
         	runNotificationOpenedCallback(appContext.getIntent().getBundleExtra("data"), false, true);
         
-        if (TrackPlayerPurchase.CanTrack(appContext))
-        	trackPurchase = new TrackPlayerPurchase(appContext, this);
+        if (TrackGooglePurchase.CanTrack(appContext))
+        	trackGooglePurchase = new TrackGooglePurchase(appContext, this);
 	}
     
     public void onPaused() {
     	foreground = false;
+    	
+		if (trackAmazonPurchase != null)
+			trackAmazonPurchase.checkListener();
+    	
+    	long time_elapsed = (long)(((SystemClock.elapsedRealtime() - lastTrackedTime) / 1000d) + 0.5d);
+    	if (time_elapsed < 0 || time_elapsed > 604800)
+    		return;
+    	
+    	long unSentActiveTime = GetUnsentActiveTime();
+    	long totalTimeActive = unSentActiveTime + time_elapsed;
+    	
+    	if (totalTimeActive < 30) {
+    		SaveUnsentActiveTime(totalTimeActive);
+    		return;
+    	}
     	
     	if (GetPlayerId() == null)
     		return;
@@ -140,8 +173,8 @@ public class GameThrive {
 		try {
 			jsonBody.put("app_id", appId);
 			jsonBody.put("state", "ping");
-			jsonBody.put("active_time", (long)(((SystemClock.elapsedRealtime() - lastTrackedTime) / 1000d) + 0.5d));
-		
+			jsonBody.put("active_time", totalTimeActive);
+			
 			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() + "/on_focus", jsonBody, new JsonHttpResponseHandler() {
 				@Override
 				public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
@@ -150,6 +183,7 @@ public class GameThrive {
 				 }
 			});
 			
+			SaveUnsentActiveTime(0);
 			lastTrackedTime = SystemClock.elapsedRealtime();
 		} catch (Throwable t) {
 			t.printStackTrace();
@@ -160,8 +194,8 @@ public class GameThrive {
     	foreground = true;
     	lastTrackedTime = SystemClock.elapsedRealtime();
     	
-    	if (trackPurchase != null)
-    		trackPurchase.trackIAP();
+    	if (trackGooglePurchase != null)
+    		trackGooglePurchase.trackIAP();
     }
     
     boolean isForeground() {
@@ -178,7 +212,7 @@ public class GameThrive {
 		    		try {
 		    			JSONObject jsonBody = new JSONObject();
 		    			jsonBody.put("app_id", appId);
-		    			jsonBody.put("device_type", 1);
+		    			jsonBody.put("device_type", deviceType);
 		    			if (registrationId != null)
 		    				jsonBody.put("identifier", registrationId);
 		    			
@@ -223,14 +257,20 @@ public class GameThrive {
 			    			if (soundList.length() > 0)
 			    				jsonBody.put("sounds", soundList);
 		    			}
-		    			catch (Throwable e) {
-		    			}
+		    			catch (Throwable e) {}
 		    			
-		    			if (GetPlayerId() == null) {
-		    				JsonHttpResponseHandler jsonHandler = new JsonHttpResponseHandler() {
-		    					@Override
-		    					public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-		    						try {
+		    			
+		    			String urlStr;
+		    			if (GetPlayerId() == null)
+		    				urlStr = "players";
+		    			else
+		    				urlStr = "players/" + GetPlayerId() + "/on_session";
+		    			
+	    				JsonHttpResponseHandler jsonHandler = new JsonHttpResponseHandler() {
+	    					@Override
+	    					public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+	    						try {
+	    							if (response.has("id")) {
 		    							SavePlayerId(response.getString("id"));
 		    							if (pendingTags != null) {
 		    								sendTags(pendingTags);
@@ -246,28 +286,19 @@ public class GameThrive {
 		    					    			 }
 		    					    		 });
 		    							}
-		    						} catch (JSONException e) {
-		    							e.printStackTrace();
-		    						}
-		    					}
-		    					
-		    					@Override
-		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.w(TAG, "JSON Create player Failed");
-		    						 throwable.printStackTrace();
-		    					 }
-
-		    				};
-		    				GameThriveRestClient.postSync(appContext, "players", jsonBody, jsonHandler);
-		    			} else {
-		    				GameThriveRestClient.postSync(appContext, "players/" + GetPlayerId() + "/on_session", jsonBody, new JsonHttpResponseHandler() {
-		    					@Override
-		    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
-		    						 Log.w(TAG, "JSON OnSession Failed");
-		    						 throwable.printStackTrace();
-		    					 }
-		    				});
-		    			}
+	    							}
+	    						} catch (JSONException e) {
+	    							e.printStackTrace();
+	    						}
+	    					}
+	    					
+	    					@Override
+	    					public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
+	    						 Log.w(TAG, "JSON Create or on_session for player Failed", throwable);
+	    					}
+	    				};
+	    				GameThriveRestClient.postSync(appContext, urlStr, jsonBody, jsonHandler);
+		    			
 		    		} catch (Throwable e) { // JSONException and UnsupportedEncodingException
 		    			e.printStackTrace();
 		    		}
@@ -405,6 +436,10 @@ public class GameThrive {
     		if (newAsExisting)
     			jsonBody.put("existing", true);
     		jsonBody.put("purchases", purchases);
+    		
+    		if (httpHandler == null)
+    			httpHandler = new JsonHttpResponseHandler();
+    		
     		GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, httpHandler);
     	} catch (Throwable e) { // JSONException and UnsupportedEncodingException
     		e.printStackTrace();
@@ -549,6 +584,24 @@ public class GameThrive {
     	final SharedPreferences prefs = getGcmPreferences(appContext);
         SharedPreferences.Editor editor = prefs.edit();
         editor.putString("GT_REGISTRATION_ID", registartionId);
+        editor.commit();
+	}
+	
+	
+	private long GetUnsentActiveTime() {
+		if (unSentActiveTime == -1) {
+			final SharedPreferences prefs = getGcmPreferences(appContext);
+			unSentActiveTime = prefs.getLong("GT_UNSENT_ACTIVE_TIME", 0);
+		}
+		
+		return unSentActiveTime;
+	}
+	
+	private void SaveUnsentActiveTime(long time) {
+		unSentActiveTime = time;
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putLong("GT_UNSENT_ACTIVE_TIME", time);
         editor.commit();
 	}
 	
