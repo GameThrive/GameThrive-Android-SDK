@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.content.Context;
@@ -87,7 +86,6 @@ class TrackAmazonPurchase {
 			try {
 				PurchasingListener curPurchasingListener = (PurchasingListener)listnerHandlerField.get(listnerHandlerObject);
 				if (curPurchasingListener != gtPurchasingListener) {
-					Log.i("GameThriveSDK", "PurchasingListener changed!!!!!");
 					gtPurchasingListener.orgPurchasingListener = curPurchasingListener;
 					setListener();
 				}
@@ -135,38 +133,38 @@ class TrackAmazonPurchase {
 
 		@Override
 		public void onProductDataResponse(final ProductDataResponse response) {
-			try {
-				switch (response.getRequestStatus()) {
-					case SUCCESSFUL:
-						for (final String s : response.getUnavailableSkus()) {
-							Log.v(TAG, "Unavailable SKU:" + s);
-						}
-		
-						JSONArray purchasesToReport = new JSONArray();
-						final Map<String, Product> products = response.getProductData();
-						for(final String key : products.keySet()) {
-							Product product = products.get(key);
-							Log.v(TAG, String.format("Product: %s\n Type: %s\n SKU: %s\n Price: %s\n Description: %s\n", product.getTitle(), product.getProductType(), product.getSku(), product.getPrice(), product.getDescription()));
-							
-							JSONObject jsonItem = new JSONObject();
-							jsonItem.put("sku",  product.getSku());
-							jsonItem.put("iso", marketToCurrencyCode(currentMarket));
-							
-							String price = product.getPrice();
-							if (!price.matches("^[0-9]"))
-								price = price.substring(1);
-							jsonItem.put("amount", price);
-							
-							purchasesToReport.put(jsonItem);
-						}
-						gameThrive.sendPurchases(purchasesToReport, false, null);
-						break;
-				}
-			} catch(Throwable t) {
-				t.printStackTrace();
-			}
+			if (lastRequestId != null && lastRequestId.toString().equals(response.getRequestId().toString())) {
+				try {
+					switch (response.getRequestStatus()) {
+						case SUCCESSFUL:
+							for (final String s : response.getUnavailableSkus()) {
+								Log.v(TAG, "Unavailable SKU:" + s);
+							}
 			
-			if (orgPurchasingListener != null && (lastRequestId == null || !lastRequestId.toString().equals(response.getRequestId().toString())))
+							JSONArray purchasesToReport = new JSONArray();
+							final Map<String, Product> products = response.getProductData();
+							for(final String key : products.keySet()) {
+								Product product = products.get(key);
+								
+								JSONObject jsonItem = new JSONObject();
+								jsonItem.put("sku",  product.getSku());
+								jsonItem.put("iso", marketToCurrencyCode(currentMarket));
+								
+								String price = product.getPrice();
+								if (!price.matches("^[0-9]"))
+									price = price.substring(1);
+								jsonItem.put("amount", price);
+								
+								purchasesToReport.put(jsonItem);
+							}
+							gameThrive.sendPurchases(purchasesToReport, false, null);
+							break;
+					}
+				} catch(Throwable t) {
+					t.printStackTrace();
+				}
+			}
+			else if (orgPurchasingListener != null)
 				orgPurchasingListener.onProductDataResponse(response);
 		}
 
@@ -174,12 +172,6 @@ class TrackAmazonPurchase {
 		public void onPurchaseResponse(PurchaseResponse response) {
 			try {
 				final PurchaseResponse.RequestStatus status = response.getRequestStatus();
-	
-				try {
-					Log.i(TAG, "onPurchaseResponse:" + response.toJSON());
-				} catch (JSONException e) {
-					e.printStackTrace();
-				}
 				
 				if (status == PurchaseResponse.RequestStatus.SUCCESSFUL) {
 					currentMarket = response.getUserData().getMarketplace();

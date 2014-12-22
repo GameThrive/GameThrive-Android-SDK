@@ -35,7 +35,7 @@ import android.net.wifi.WifiManager;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 
-public class AdvertisingIdProviderFallback implements AdvertisingIdentifierProvider {
+class AdvertisingIdProviderFallback implements AdvertisingIdentifierProvider {
 	
 	private static final List<String> INVALID_PHONE_IDS = Arrays.asList(
 		"", "0", "unknown", "739463", "000000000000000","111111111111111","352005048247251","012345678912345", "012345678901237", "88508850885050", "0123456789abcde",

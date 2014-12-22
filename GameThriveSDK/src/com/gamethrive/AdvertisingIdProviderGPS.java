@@ -32,7 +32,7 @@ import com.google.android.gms.ads.identifier.AdvertisingIdClient;
 import android.content.Context;
 import android.util.Log;
 
-public class AdvertisingIdProviderGPS implements AdvertisingIdentifierProvider {
+class AdvertisingIdProviderGPS implements AdvertisingIdentifierProvider {
 
 	@Override
 	public String getIdentifier(Context appContext) {

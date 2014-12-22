@@ -87,8 +87,8 @@ public class GameThrive {
 	private TrackGooglePurchase trackGooglePurchase;
 	private TrackAmazonPurchase trackAmazonPurchase;
 	
-	public static final int VERSION = 010600;
-	public static final String STRING_VERSION = "010600";
+	public static final int VERSION = 010601;
+	public static final String STRING_VERSION = "010601";
 	
 	private PushRegistrator pushRegistrator;
 	private AdvertisingIdentifierProvider mainAdIdProvider = new AdvertisingIdProviderGPS();
