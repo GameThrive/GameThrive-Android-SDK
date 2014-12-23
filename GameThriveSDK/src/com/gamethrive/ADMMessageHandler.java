@@ -55,13 +55,16 @@ public class ADMMessageHandler extends ADMMessageHandlerBase {
 	@Override
 	protected void onRegistered(String newRegistrationId) {
 		Log.i(GameThrive.TAG, "ADM registartion ID: " + newRegistrationId);
-		PushRegistratorADM.registeredCallback.complete(newRegistrationId);
+		PushRegistratorADM.fireCallback(newRegistrationId);
 	}
 
 	@Override
 	protected void onRegistrationError(String error) {
 		Log.e(GameThrive.TAG, "ADM:onRegistrationError: " + error);
-		PushRegistratorADM.registeredCallback.complete(null);
+		if ("INVALID_SENDER".equals(error))
+			Log.e(GameThrive.TAG, "Please double check that you have a mathcing package name (NOTE: Case Sensitive), api_key.txt, and the apk was signed with the same Keystore and Alias.");
+		
+		PushRegistratorADM.fireCallback(null);
 	}
 
 	@Override

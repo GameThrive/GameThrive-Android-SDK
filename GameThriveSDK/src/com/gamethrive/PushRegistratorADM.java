@@ -32,21 +32,36 @@ import com.amazon.device.messaging.ADM;
 import android.content.Context;
 import android.util.Log;
 
-public class PushRegistratorADM implements PushRegistrator {
+class PushRegistratorADM implements PushRegistrator {
 	
-	static RegisteredHandler registeredCallback;
+	private static RegisteredHandler registeredCallback;
+	private static boolean callbackSuccessful = false;
 	
 	@Override
-	public void registerForPush(Context context, String noKeyNeeded, RegisteredHandler callback) {
+	public void registerForPush(final Context context, String noKeyNeeded, final RegisteredHandler callback) {
 		registeredCallback = callback;
-		
-		final ADM adm = new ADM(context);
-		String registrationId = adm.getRegistrationId();
-		if (registrationId == null)
-			adm.startRegister();
-		else {
-			Log.i(GameThrive.TAG, "ADM Already registed with ID:" + registrationId);
-			callback.complete(registrationId);
-		}
+		new Thread(new Runnable() {
+    		public void run() {
+				final ADM adm = new ADM(context);
+				String registrationId = adm.getRegistrationId();
+				if (registrationId == null)
+					adm.startRegister();
+				else {
+					Log.i(GameThrive.TAG, "ADM Already registed with ID:" + registrationId);
+					callback.complete(registrationId);
+				}
+				
+				try { Thread.sleep(30000); } catch (InterruptedException e) {}
+				if (!callbackSuccessful) {
+					Log.e(GameThrive.TAG, "com.gamethrive.ADMMessageHandler timed out, please check that your have the reciever, service, and your package name matches(NOTE: Case Sensitive) per the GameThrive instructions.");
+					fireCallback(null);
+				}
+    		}
+		}).start();
+	}
+	
+	static void fireCallback(String id) {
+		callbackSuccessful = true;
+		registeredCallback.complete(id);
 	}
 }
