@@ -1,7 +1,7 @@
 /**
  * Modified MIT License
  * 
- * Copyright 2014 GameThrive
+ * Copyright 2015 GameThrive
  * 
  * Portions Copyright 2013 Google Inc.
  * This file includes portions from the Google GcmClient demo project
@@ -63,7 +63,7 @@ public class GcmIntentService extends IntentService {
         Bundle extras = intent.getExtras();
         
     	if (isGcmMessage(intent))
-    		GenerateNotification.fromBundle(this, extras);
+    		NotificationBundleProcessor.Process(this, extras);
         
         // Release the wake lock provided by the WakefulBroadcastReceiver.
         GcmBroadcastReceiver.completeWakefulIntent(intent);

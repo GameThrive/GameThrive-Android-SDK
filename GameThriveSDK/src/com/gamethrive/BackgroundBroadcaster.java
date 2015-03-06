@@ -27,16 +27,23 @@
 
 package com.gamethrive;
 
-import org.json.JSONObject;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
 
-public interface NotificationOpenedHandler {
-	/**
-	 * Callback to implement in your app to handle when a notification is opened from the Android status bar or
-	 * a new one comes in while the app is running.
-	 *
-	 * @param message        The message string the user seen/should see in the Android status bar.
-	 * @param additionalData The additionalData key value pair section you entered in on gamethrive.com.
-	 * @param isActive       Was the app in the foreground when the notification was received. 
-	 */
-	void notificationOpened(String message, JSONObject additionalData, boolean isActive);
+public class BackgroundBroadcaster {
+
+	public static void Invoke(Context context, Bundle extras, boolean isActive) {
+		if (extras.containsKey("bgn") && "1".equals(extras.getString("bgn"))) {
+			Intent intent = new Intent();
+			intent.setAction("com.gamethrive.BackgroundBroadcast.RECEIVE");
+			intent.setPackage(context.getPackageName());
+			
+			Bundle fullBundle = new Bundle(extras);
+			fullBundle.putBoolean("isActive", isActive);
+			intent.putExtra("data", fullBundle);
+			
+			context.sendBroadcast(intent);
+		}
+	}
 }

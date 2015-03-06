@@ -6,7 +6,7 @@
 
     <uses-sdk
         android:minSdkVersion="9"
-        android:targetSdkVersion="19" />
+        android:targetSdkVersion="21" />
     
     <!-- ##START## GameThrive Permissions -->
     
@@ -60,6 +60,15 @@
          	</intent-filter>
      	</receiver>
      	<service android:name="com.gamethrive.GcmIntentService" />
+     	
+     	<!-- Optional receiver to get GameThrive Background Data Notifications. -->
+     	<receiver
+            android:name="com.hiptic.gamethriveexample.GameThriveBroadcastReceiver"
+            android:exported="false">
+        	<intent-filter>
+            	<action android:name="com.gamethrive.BackgroundBroadcast.RECEIVE" />
+         	</intent-filter>
+     	</receiver>
      	<!-- ##END## GameThrive -->
      	
     </application>

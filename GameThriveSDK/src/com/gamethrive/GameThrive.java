@@ -1,7 +1,7 @@
 /**
  * Modified MIT License
  * 
- * Copyright 2014 GameThrive
+ * Copyright 2015 GameThrive
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -87,8 +89,8 @@ public class GameThrive {
 	private TrackGooglePurchase trackGooglePurchase;
 	private TrackAmazonPurchase trackAmazonPurchase;
 	
-	public static final int VERSION = 010601;
-	public static final String STRING_VERSION = "010601";
+	public static final int VERSION = 010700;
+	public static final String STRING_VERSION = "010700";
 	
 	private PushRegistrator pushRegistrator;
 	private AdvertisingIdentifierProvider mainAdIdProvider = new AdvertisingIdProviderGPS();
@@ -174,6 +176,7 @@ public class GameThrive {
 			jsonBody.put("app_id", appId);
 			jsonBody.put("state", "ping");
 			jsonBody.put("active_time", totalTimeActive);
+			addNetType(jsonBody);
 			
 			GameThriveRestClient.post(appContext, "players/" + GetPlayerId() + "/on_focus", jsonBody, new JsonHttpResponseHandler() {
 				@Override
@@ -200,6 +203,19 @@ public class GameThrive {
     
     boolean isForeground() {
     	return foreground;
+    }
+    
+    private void addNetType(JSONObject jsonObj) {
+    	try {
+			ConnectivityManager cm = (ConnectivityManager)appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+			NetworkInfo netInfo = cm.getActiveNetworkInfo();
+			
+			int networkType = netInfo.getType();
+			int netType = 1;
+			if (networkType == ConnectivityManager.TYPE_WIFI || networkType == ConnectivityManager.TYPE_ETHERNET)
+				netType = 0;
+			jsonObj.put("net_type", netType);
+		} catch (Throwable t) {}
     }
 	
     private void registerPlayer(String id) {
@@ -234,8 +250,9 @@ public class GameThrive {
 		    			jsonBody.put("sdk", STRING_VERSION);
 		    			try {
 		    				jsonBody.put("game_version", appContext.getPackageManager().getPackageInfo(appContext.getPackageName(), 0).versionName);
-		    			}
-		    			catch (PackageManager.NameNotFoundException e) {}
+		    			} catch (PackageManager.NameNotFoundException e) {}
+		    			
+		    			addNetType(jsonBody);
 		    			
 		    			if (RootToolsInternalMethods.isRooted())
 		    				jsonBody.put("rooted", true);
@@ -330,6 +347,7 @@ public class GameThrive {
 				JSONObject jsonBody = new JSONObject();
 				jsonBody.put("app_id", appId);
 				jsonBody.put("tags", keyValues);
+				addNetType(jsonBody);
 				
 				GameThriveRestClient.put(appContext, "players/" + GetPlayerId(), jsonBody, new JsonHttpResponseHandler() {
 					@Override
@@ -440,7 +458,7 @@ public class GameThrive {
     		if (httpHandler == null)
     			httpHandler = new JsonHttpResponseHandler();
     		
-    		GameThriveRestClient.post(appContext, "players/" + GetPlayerId() +"/on_purchase", jsonBody, httpHandler);
+    		GameThriveRestClient.post(appContext, "players/" + GetPlayerId() + "/on_purchase", jsonBody, httpHandler);
     	} catch (Throwable e) { // JSONException and UnsupportedEncodingException
     		e.printStackTrace();
     	}
@@ -449,16 +467,6 @@ public class GameThrive {
     private void runNotificationOpenedCallback(final Bundle data, final boolean isActive, boolean isUiThread) {
     	try {
     		 JSONObject customJSON = new JSONObject(data.getString("custom"));
-    		 JSONObject additionalDataJSON = null;
-    		 
-    		 if (customJSON.has("a"))
-    			 additionalDataJSON = customJSON.getJSONObject("a");
-    		 
-    		 if (data.containsKey("title")) {
-    			 if (additionalDataJSON == null)
-    				 additionalDataJSON = new JSONObject();
-    			 additionalDataJSON.put("title", data.getString("title"));
-    		 }
     		 
     		 if (!isActive && customJSON.has("u")) {
     			 String url = customJSON.getString("u");
@@ -469,6 +477,32 @@ public class GameThrive {
     		 }
     		 
     		 if (notificationOpenedHandler != null) {
+        		 JSONObject additionalDataJSON = new JSONObject();
+        		 
+        		 if (customJSON.has("a"))
+        			 additionalDataJSON = customJSON.getJSONObject("a");
+        		 
+        		 if (data.containsKey("title"))
+        			 additionalDataJSON.put("title", data.getString("title"));
+        		 
+        		 if (customJSON.has("u"))
+        			 additionalDataJSON.put("launchURL", customJSON.getString("u"));
+        		 
+        		 if (data.containsKey("sound"))
+        			 additionalDataJSON.put("sound", data.getString("sound"));
+        		 
+        		 if (data.containsKey("sicon"))
+        			 additionalDataJSON.put("smallIcon", data.getString("sicon"));
+        		 
+        		 if (data.containsKey("licon"))
+        			 additionalDataJSON.put("largeIcon", data.getString("licon"));
+        		 
+        		 if (data.containsKey("bicon"))
+        			 additionalDataJSON.put("bigPicture", data.getString("bicon"));
+        		 
+        		 if (additionalDataJSON.equals(new JSONObject()))
+        			additionalDataJSON = null;
+        		 
         		 final JSONObject finalAdditionalDataJSON = additionalDataJSON;
 	    		 Runnable callBack = new Runnable() {
 	    			 @Override
@@ -577,6 +611,34 @@ public class GameThrive {
     		registrationId = prefs.getString("GT_REGISTRATION_ID", null);
     	}
     	return registrationId;
+    }
+    
+    // If true(default) - Device will always vibrate unless the device is in silent mode.
+    // If false - Device will only vibrate when the device is set on it's vibrate only mode.
+    public void enableVibrate(boolean enable) {
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putBoolean("GT_VIBRATE_ENABLED", enable);
+        editor.commit();
+    }
+    
+    static boolean getVibrate(Context appContext) {
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+    	return prefs.getBoolean("GT_VIBRATE_ENABLED", true);
+    }
+    
+    // If true(default) - Sound plays when receiving notification. Vibrates when device is on vibrate only mode.
+    // If false - Only vibrates unless EnableVibrate(false) was set.
+    public void enableSound(boolean enable) {
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putBoolean("GT_SOUND_ENABLED", enable);
+        editor.commit();
+    }
+    
+    static boolean getSoundEnabled(Context appContext) {
+    	final SharedPreferences prefs = getGcmPreferences(appContext);
+    	return prefs.getBoolean("GT_SOUND_ENABLED", true);
     }
     
 	private void SaveRegistractionId(String registartionId) {

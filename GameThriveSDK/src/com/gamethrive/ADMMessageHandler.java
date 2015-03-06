@@ -1,7 +1,7 @@
 /**
  * Modified MIT License
  * 
- * Copyright 2014 GameThrive
+ * Copyright 2015 GameThrive
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,6 @@
 package com.gamethrive;
 
 import android.content.Intent;
-import android.os.Bundle;
 import android.util.Log;
 
 import com.amazon.device.messaging.ADMMessageHandlerBase;
@@ -48,8 +47,7 @@ public class ADMMessageHandler extends ADMMessageHandlerBase {
 
 	@Override
 	protected void onMessage(Intent intent) {
-		final Bundle extras = intent.getExtras();
-		GenerateNotification.fromBundle(this, extras);
+		NotificationBundleProcessor.Process(this, intent.getExtras());
 	}
 
 	@Override

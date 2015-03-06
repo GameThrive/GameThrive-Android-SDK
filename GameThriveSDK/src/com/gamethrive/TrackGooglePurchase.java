@@ -1,7 +1,7 @@
 /**
  * Modified MIT License
  * 
- * Copyright 2014 GameThrive
+ * Copyright 2015 GameThrive
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -120,7 +120,8 @@ class TrackGooglePurchase {
 				public void onServiceConnected(ComponentName name, IBinder service) {
 					try {
 						Class<?> stubClass = Class.forName("com.android.vending.billing.IInAppBillingService$Stub");
-						Method asInterfaceMethod = stubClass.getMethod("asInterface", android.os.IBinder.class);
+						Method asInterfaceMethod = stubClass.getDeclaredMethod("asInterface", android.os.IBinder.class);
+						asInterfaceMethod.setAccessible(true);
 						mIInAppBillingService = asInterfaceMethod.invoke(null, service);
 						
 						QueryBoughtItems();
@@ -146,10 +147,12 @@ class TrackGooglePurchase {
 		new Thread(new Runnable() {
 			public void run() {
 				isWaitingForPurchasesRequest = true;
-				try {					
-					if (getPurchasesMethod == null)
-						getPurchasesMethod = IInAppBillingServiceClass.getMethod("getPurchases", int.class, String.class, String.class, String.class);
-		
+				try {
+					if (getPurchasesMethod == null) {
+						getPurchasesMethod = IInAppBillingServiceClass.getDeclaredMethod("getPurchases", int.class, String.class, String.class, String.class);
+						getPurchasesMethod.setAccessible(true);
+					}
+					
 					Bundle ownedItems = (Bundle)getPurchasesMethod.invoke(mIInAppBillingService, 3, appContext.getPackageName(), "inapp", null);
 					if (ownedItems.getInt("RESPONSE_CODE") == 0) {
 						ArrayList<String> skusToAdd = new ArrayList<String>();
@@ -190,8 +193,10 @@ class TrackGooglePurchase {
 
 	private void sendPurchases(final ArrayList<String> skusToAdd, final ArrayList<String> newPurchaseTokens) {
 		try {	
-			if (getSkuDetailsMethod == null)
-				getSkuDetailsMethod = IInAppBillingServiceClass.getMethod("getSkuDetails", int.class, String.class, String.class, Bundle.class);
+			if (getSkuDetailsMethod == null) {
+				getSkuDetailsMethod = IInAppBillingServiceClass.getDeclaredMethod("getSkuDetails", int.class, String.class, String.class, Bundle.class);
+				getSkuDetailsMethod.setAccessible(true);
+			}
 			
 			Bundle querySkus = new Bundle();
 			querySkus.putStringArrayList("ITEM_ID_LIST", skusToAdd);

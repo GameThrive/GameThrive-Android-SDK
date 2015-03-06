@@ -1,7 +1,7 @@
 /**
  * Modified MIT License
  * 
- * Copyright 2014 GameThrive
+ * Copyright 2015 GameThrive
  * 
  * Portions Copyright 2013 Google Inc.
  * This file includes portions from the Google GcmClient demo project
